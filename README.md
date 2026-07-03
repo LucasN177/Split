@@ -1,4 +1,4 @@
-# Split
+#Split
 
 Split ist eine moderne Progressive Web App (PWA) zur einfachen Verwaltung gemeinsamer Ausgaben mit Freunden, Familie oder Gruppen. Die Anwendung hilft dabei, Kosten transparent zu erfassen, offene Beträge zu berechnen und Ausgleichszahlungen übersichtlich nachzuverfolgen.
 
@@ -74,22 +74,11 @@ Split berechnet diese Verhältnisse automatisch und stellt die notwendigen Ausgl
 
 ⸻
 
-Projektstruktur
-
-Split/
-├── Client/          # Blazor WebAssembly Frontend
-├── Shared/          # Gemeinsame Modelle und DTOs
-├── Services/        # Geschäftslogik und API-Kommunikation
-├── wwwroot/         # Statische Dateien und PWA-Ressourcen
-└── README.md
-
-⸻
-
 Lokale Entwicklung
 
 Voraussetzungen
 
-* .NET SDK 8.0 oder höher
+* .NET SDK 10.0 oder höher
 * Supabase-Projekt
 * Git
 
@@ -174,7 +163,6 @@ Dieses Projekt steht unter der MIT-Lizenz.
 
 ⸻
 
-Autor
+Lucas Nagelsmann
 
 Entwickelt mit ❤️ für eine einfachere und transparentere Verwaltung gemeinsamer Ausgaben.
-
