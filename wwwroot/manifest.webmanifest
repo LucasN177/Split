@@ -1,6 +1,6 @@
 {
-  "name": "Syncro",
-  "short_name": "Syncro",
+  "name": "Split",
+  "short_name": "Split",
   "id": "./",
   "start_url": "./",
   "display": "standalone",
