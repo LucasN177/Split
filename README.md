@@ -1,4 +1,4 @@
-#Split
+# Split
 
 Split ist eine moderne Progressive Web App (PWA) zur einfachen Verwaltung gemeinsamer Ausgaben mit Freunden, Familie oder Gruppen. Die Anwendung hilft dabei, Kosten transparent zu erfassen, offene Beträge zu berechnen und Ausgleichszahlungen übersichtlich nachzuverfolgen.
 
