@@ -51,16 +51,16 @@ public class AuthRepository(Supabase.Client client): IAuthRepository
         }
     }
 
-    public async Task<IResponse> InsertUserMetadata(UserDto userDto)
+    public async Task<IResponse> InsertUserMetadata(UserDto user)
     {
         try
         {
-            userDto.UserId = client.Auth.CurrentUser.Id;
-            var result = await client.From<UserDto>()
+            user.UserId = client.Auth.CurrentUser.Id;
+            await client.From<UserDto>()
                 .Where(x => x.UserId == client.Auth.CurrentUser.Id)
-                .Set(x => x.Username, userDto.Username)
-                .Set(x => x.Vorname, userDto.Vorname)
-                .Set(x =>x.Nachname, userDto.Nachname)
+                .Set(x => x.Username, user.Username)
+                .Set(x => x.Vorname, user.Vorname)
+                .Set(x =>x.Nachname, user.Nachname)
                 .Update();
             return Response.Success();
         }

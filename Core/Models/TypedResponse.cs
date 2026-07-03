@@ -28,7 +28,7 @@ public class Response<T> : Response, IResponse<T>
             Exception = exception
         };
     
-    public new static IResponse<T> Failure(string errorMessage)
+    public static IResponse<T> Failure(string errorMessage)
         => new Response<T>()
         {
             IsSuccess = false,
