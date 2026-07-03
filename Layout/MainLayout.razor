@@ -1,4 +1,4 @@
-﻿@using Split.Services
+@using Split.Services
 @inherits LayoutComponentBase
 @inject AppStateService AppStateService
 
@@ -19,15 +19,16 @@
                    Edge="Edge.Start" 
                    OnClick="@AppStateService.DrawerToggle" />
         
-    <MudHidden Breakpoint="Breakpoint.SmAndDown">
+    
         <MudStack Row="false" Spacing="0">
             <MudText Typo="Typo.h5" Class="mr-6 font-weight-bold" Style="margin-bottom: 0">
                 Split
             </MudText>
-            <MudText Typo="Typo.body2" Style="margin-top: 0">By Lucas Nagelsmann</MudText>
-        </MudStack>
+						<MudHidden Breakpoint="Breakpoint.SmAndDown">
+		            <MudText Typo="Typo.body2" Style="margin-top: 0">By Lucas Nagelsmann</MudText>
+		        </MudHidden>
+				</MudStack>
             
-    </MudHidden>
     <MudSpacer />
         
     <MudIconButton Icon="@(AppStateService.IsDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
