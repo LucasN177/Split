@@ -2,7 +2,6 @@
 @inherits LayoutComponentBase
 @inject AppStateService AppStateService
 
-
 @* Required *@
 <MudThemeProvider Theme="@_theme" IsDarkMode="@AppStateService.IsDarkMode"/>
 <MudPopoverProvider />
@@ -15,36 +14,29 @@
 
 <MudLayout>
     <MudAppBar Elevation="2" Color="Color.Primary" Fixed="true" Dense="false">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" 
-                       Color="Color.Inherit" 
-                       Edge="Edge.Start" 
-                       OnClick="@(() => AppStateService.DrawerToggle())" />
+    <MudIconButton Icon="@Icons.Material.Filled.Menu" 
+                   Color="Color.Inherit" 
+                   Edge="Edge.Start" 
+                   OnClick="@AppStateService.DrawerToggle" />
         
-        <MudHidden Breakpoint="Breakpoint.SmAndDown">
-            <MudStack Row="false" Spacing="0">
-                <MudText Typo="Typo.h5" Class="mr-6 font-weight-bold" Style="margin-bottom: 0">
-                    Split
-                </MudText>
-                <MudText Typo="Typo.body2" Style="margin-top: 0">By Lucas Nagelsmann</MudText>
-            </MudStack>
+    <MudHidden Breakpoint="Breakpoint.SmAndDown">
+        <MudStack Row="false" Spacing="0">
+            <MudText Typo="Typo.h5" Class="mr-6 font-weight-bold" Style="margin-bottom: 0">
+                Split
+            </MudText>
+            <MudText Typo="Typo.body2" Style="margin-top: 0">By Lucas Nagelsmann</MudText>
+        </MudStack>
             
-        </MudHidden>
+    </MudHidden>
+    <MudSpacer />
         
-        <MudSpacer />
-        
-        <MudIconButton Icon="@(AppStateService.IsDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
-                       Color="Color.Inherit" 
-                       OnClick="@AppStateService.ToggleDarkMode" />
+    <MudIconButton Icon="@(AppStateService.IsDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
+                   Color="Color.Inherit" 
+                   OnClick="@AppStateService.ToggleDarkMode" />
     </MudAppBar>
-    
-    <MudDrawer @bind-Open="AppStateService.IsDrawerOpen"
-               ClipMode="DrawerClipMode.Always"
-               Elevation="2"
-               Variant="@DrawerVariant.Responsive"
+    <MudDrawer @bind-Open="AppStateService.IsDrawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Variant="@DrawerVariant.Responsive"
                OpenMiniOnHover="false">
-        
         <NavMenu/>
-
         <MudSpacer/>
         @if (AppStateService.IsDrawerOpen)
         {
@@ -58,21 +50,15 @@
                 </MudText>
             </div>
         }
-
     </MudDrawer>
-    
-    <MudMainContent Class="pa-4">
-        <MudContainer MaxWidth="MaxWidth.False" Class="pa-5">
-            <div class="content-wrapper">
-                @Body
-            </div>
-        </MudContainer>
+    <MudMainContent>
+        @Body
     </MudMainContent>
-    
 </MudLayout>
 
 @code
 {
+    
     private readonly MudTheme _theme = new()
 {
     PaletteLight = new PaletteLight()
@@ -170,4 +156,5 @@
     Shadows = new Shadow(),
     ZIndex = new ZIndex()
 };
+    
 }
