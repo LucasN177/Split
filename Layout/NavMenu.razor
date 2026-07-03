@@ -1,0 +1,62 @@
+﻿
+
+<div class="@NavMenuCssClass nav-scrollable mt-2" @onclick="ToggleNavMenu">
+    <MudNavMenu>
+
+        <!-- MAIN -->
+        <MudText Typo="Typo.caption" Class="px-3 mt-2 mb-1 text-muted">
+            MAIN
+        </MudText>
+
+        <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+            Dashboard
+        </MudNavLink>
+
+        <MudNavLink Href="projects" Icon="@Icons.Material.Filled.Folder">
+            Projekte
+        </MudNavLink>
+
+        <MudNavLink Href="board" Icon="@Icons.Material.Filled.ViewKanban">
+            Board
+        </MudNavLink>
+
+        <MudNavLink Href="calendar" Icon="@Icons.Material.Filled.CalendarMonth">
+            Kalender
+        </MudNavLink>
+
+
+        <!-- TEAM -->
+        <MudDivider Class="my-3"/>
+        <MudText Typo="Typo.caption" Class="px-3 mt-4 mb-1 text-muted">
+            TEAM
+        </MudText>
+
+        <MudNavLink Href="team" Icon="@Icons.Material.Filled.Group">
+            Team
+        </MudNavLink>
+
+        <MudNavLink Href="reports" Icon="@Icons.Material.Filled.BarChart">
+            Reports
+        </MudNavLink>
+
+
+        <!-- SYSTEM -->
+        <MudDivider Class="my-3"/>
+
+        <MudNavLink Href="settings" Icon="@Icons.Material.Filled.Settings">
+            Einstellungen
+        </MudNavLink>
+
+    </MudNavMenu>
+</div>
+
+@code {
+    private bool _collapseNavMenu = true;
+
+    private string? NavMenuCssClass => _collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        _collapseNavMenu = !_collapseNavMenu;
+    }
+}
