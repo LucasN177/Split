@@ -9,7 +9,8 @@ public interface IExpenseRepository
 
     public Task<IResponse<List<ExpenseShareDto>>> GetShares(IReadOnlyCollection<string> expenseIds);
 
-    public Task<IResponse<ExpenseDto>> SaveExpense(ExpenseDto expense, List<ExpenseShareDto> shares);
+    /// <summary>Speichert Ausgabe und Aufteilung atomar (RPC split_save_expense). Gibt die ID zurück.</summary>
+    public Task<IResponse<string>> SaveExpense(ExpenseDto expense, List<ExpenseShareDto> shares);
 
     public Task<IResponse> DeleteExpense(string expenseId);
 
@@ -17,5 +18,16 @@ public interface IExpenseRepository
 
     public Task<IResponse<SettlementDto>> AddSettlement(SettlementDto settlement);
 
+    public Task<IResponse> UpdateSettlement(SettlementDto settlement);
+
     public Task<IResponse> DeleteSettlement(string settlementId);
+
+    public Task<IResponse<List<RecurringExpenseDto>>> GetRecurring(string groupId);
+
+    public Task<IResponse> SaveRecurring(RecurringExpenseDto recurring);
+
+    public Task<IResponse> DeleteRecurring(string recurringId);
+
+    /// <summary>Erzeugt fällige wiederkehrende Ausgaben. Gibt die Anzahl neuer Ausgaben zurück.</summary>
+    public Task<IResponse<int>> ProcessRecurring(string groupId);
 }

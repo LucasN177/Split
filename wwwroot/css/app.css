@@ -241,3 +241,32 @@ html, body {
     .blazor-error-boundary::after {
         content: "Es ist ein Fehler aufgetreten."
     }
+
+/* Hinweis auf neue App-Version (wird von js/app.js eingeblendet) */
+#split-update {
+    position: fixed;
+    left: 50%;
+    bottom: calc(1rem + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    z-index: 2500;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: calc(100vw - 2rem);
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    background: #1F2937;
+    color: #F9FAFB;
+    font-size: 0.9rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+    #split-update button {
+        border: 0;
+        border-radius: 8px;
+        padding: 0.4rem 0.9rem;
+        background: #F97316;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+    }

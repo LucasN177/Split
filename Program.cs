@@ -45,8 +45,15 @@ builder.Services.AddSingleton<Client>(provider =>
 builder.Services.AddSingleton<IAuthRepository, AuthRepository>();
 builder.Services.AddSingleton<IGroupRepository, GroupRepository>();
 builder.Services.AddSingleton<IExpenseRepository, ExpenseRepository>();
+builder.Services.AddSingleton<IReceiptRepository, ReceiptRepository>();
+builder.Services.AddSingleton<IPushRepository, PushRepository>();
+builder.Services.AddSingleton<LocalStore>();
 
 builder.Services.AddSingleton<AppStateService>();
+builder.Services.AddSingleton<ConnectivityService>();
+builder.Services.AddSingleton<OfflineSyncService>();
+builder.Services.AddSingleton<RealtimeService>();
+builder.Services.AddSingleton<PushService>();
 builder.Services.AddSingleton<IAuthService, AuthService>();
 builder.Services.AddSingleton<IGroupService, GroupService>();
 builder.Services.AddSingleton<IExpenseService, ExpenseService>();

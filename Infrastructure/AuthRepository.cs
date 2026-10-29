@@ -87,11 +87,11 @@ public class AuthRepository(Supabase.Client client): IAuthRepository
         }
     }
 
-    public async Task<IResponse> ResetPassword(string email)
+    public async Task<IResponse> ResetPassword(string email, string redirectTo)
     {
         try
         {
-            await client.Auth.ResetPasswordForEmail(email.Trim());
+            await client.Auth.ResetPasswordForEmail(new ResetPasswordForEmailOptions(email.Trim()) { RedirectTo = redirectTo });
             return Response.Success();
         }
         catch (GotrueException ex)
@@ -101,6 +101,42 @@ public class AuthRepository(Supabase.Client client): IAuthRepository
         catch (Exception ex)
         {
             return Response.Failure(ex.Message, ex);
+        }
+    }
+
+    public async Task<IResponse> UpdatePassword(string newPassword)
+    {
+        try
+        {
+            await client.Auth.Update(new UserAttributes { Password = newPassword });
+            return Response.Success();
+        }
+        catch (GotrueException ex)
+        {
+            return Response.Failure(ex.Message.Contains("different", StringComparison.OrdinalIgnoreCase)
+                ? "Das neue Passwort muss sich vom alten unterscheiden."
+                : Translate(ex), ex);
+        }
+        catch (Exception ex)
+        {
+            return Response.Failure(ex.Message, ex);
+        }
+    }
+
+    public async Task<IResponse<Session>> SessionFromUrl(Uri uri)
+    {
+        try
+        {
+            var session = await client.Auth.GetSessionFromUrl(uri, true);
+            return session is not null ? Response<Session>.Success(session) : Response<Session>.Failure("Link ungültig");
+        }
+        catch (GotrueException ex)
+        {
+            return Response<Session>.Failure(Translate(ex));
+        }
+        catch (Exception ex)
+        {
+            return Response<Session>.Failure(ex);
         }
     }
 

@@ -3,6 +3,9 @@
 @inject AppStateService AppStateService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject PushService PushService
+@inject IGroupService GroupService
+@inject IDialogService DialogService
 
 <PageTitle>Einstellungen – Split</PageTitle>
 
@@ -40,6 +43,27 @@
                            Disabled="_busy" OnClick="SaveProfile">Speichern</MudButton>
             </MudStack>
         </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-6 mt-3">
+            <MudText Typo="Typo.h6" Class="mb-4">Passwort ändern</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_newPassword" Label="Neues Passwort" Variant="Variant.Outlined" InputType="InputType.Password"
+                                  Immediate="true" HelperText="Mindestens 8 Zeichen" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_newPasswordRepeat" Label="Wiederholen" Variant="Variant.Outlined" InputType="InputType.Password"
+                                  Immediate="true" Error="@(_newPasswordRepeat.Length > 0 && _newPasswordRepeat != _newPassword)"
+                                  ErrorText="Passwörter stimmen nicht überein" />
+                </MudItem>
+            </MudGrid>
+            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Key"
+                           Disabled="@(_busy || _newPassword.Length < 8 || _newPassword != _newPasswordRepeat)" OnClick="ChangePassword">
+                    Passwort ändern
+                </MudButton>
+            </MudStack>
+        </MudPaper>
     </MudItem>
 
     <MudItem xs="12" md="5">
@@ -50,18 +74,43 @@
         </MudPaper>
 
         <MudPaper Elevation="1" Class="pa-6 mb-3">
+            <MudText Typo="Typo.h6" Class="mb-2">Benachrichtigungen</MudText>
+            @if (_pushAvailable)
+            {
+                <MudSwitch T="bool" Value="_pushEnabled" ValueChanged="TogglePush" Color="Color.Primary" Disabled="_busy"
+                           Label="Push bei neuen Ausgaben in meinen Gruppen" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Gilt für dieses Gerät.</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Push-Benachrichtigungen sind auf diesem Gerät bzw. in dieser Installation nicht verfügbar.
+                    Auf dem iPhone funktionieren sie nur, wenn Split zum Home-Bildschirm hinzugefügt wurde.
+                </MudText>
+            }
+        </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-6 mb-3">
             <MudText Typo="Typo.h6" Class="mb-2">App</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
                 Split lässt sich als App installieren: im Browser-Menü „Zum Startbildschirm hinzufügen“ bzw. „App installieren“ wählen.
+                Zuletzt geladene Gruppen sind auch offline verfügbar.
             </MudText>
             <MudText Class="mud-text-secondary" Typo="Typo.caption">Version @(typeof(Settings).Assembly.GetName().Version?.ToString(3))</MudText>
         </MudPaper>
 
         <MudPaper Elevation="1" Class="pa-6">
             <MudText Typo="Typo.h6" Class="mb-4">Konto</MudText>
-            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Logout" FullWidth="true" OnClick="Logout">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Logout" FullWidth="true" OnClick="Logout">
                 Abmelden
             </MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteForever" FullWidth="true" Class="mt-2"
+                       Disabled="_busy" OnClick="DeleteMyData">
+                Meine Split-Daten entfernen
+            </MudButton>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">
+                Verlässt alle Gruppen. Das Konto selbst bleibt bestehen, da es auch von anderen Apps genutzt wird.
+            </MudText>
         </MudPaper>
     </MudItem>
 </MudGrid>
@@ -71,12 +120,78 @@
     private bool _isValid;
     private bool _busy;
     private UserDto _profile = new();
+    private string _newPassword = string.Empty;
+    private string _newPasswordRepeat = string.Empty;
+    private bool _pushAvailable;
+    private bool _pushEnabled;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         var current = AuthService.CurrentProfile;
         if (current is not null)
             _profile = new UserDto { UserId = current.UserId, Username = current.Username ?? "", Vorname = current.Vorname ?? "", Nachname = current.Nachname ?? "" };
+
+        _pushAvailable = await PushService.IsAvailable();
+        if (_pushAvailable)
+            _pushEnabled = await PushService.IsSubscribed();
+    }
+
+    private async Task ChangePassword()
+    {
+        _busy = true;
+        var result = await AuthService.UpdatePassword(_newPassword);
+        _busy = false;
+
+        if (result.IsSuccess)
+        {
+            _newPassword = _newPasswordRepeat = string.Empty;
+            Snackbar.Add("Passwort geändert.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.ErrorMessage ?? "Passwort konnte nicht geändert werden", Severity.Error);
+        }
+    }
+
+    private async Task TogglePush(bool enable)
+    {
+        _busy = true;
+        var result = enable ? await PushService.Subscribe() : await PushService.Unsubscribe();
+        _busy = false;
+
+        if (result.IsSuccess)
+        {
+            _pushEnabled = enable;
+            Snackbar.Add(enable ? "Benachrichtigungen aktiviert." : "Benachrichtigungen deaktiviert.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.ErrorMessage ?? "Fehler", Severity.Error);
+        }
+    }
+
+    private async Task DeleteMyData()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync("Split-Daten entfernen",
+            "Du verlässt alle Gruppen. Gruppen, in denen du das einzige Konto bist, werden gelöscht. Das kann nicht rückgängig gemacht werden.",
+            yesText: "Entfernen", cancelText: "Abbrechen");
+        if (confirmed != true) return;
+
+        _busy = true;
+        if (_pushEnabled)
+            await PushService.Unsubscribe();
+        var result = await GroupService.DeleteMyData();
+        _busy = false;
+
+        if (result.IsSuccess)
+        {
+            Snackbar.Add("Deine Split-Daten wurden entfernt.", Severity.Success);
+            Navigation.NavigateTo("");
+        }
+        else
+        {
+            Snackbar.Add(result.ErrorMessage ?? "Fehler", Severity.Error);
+        }
     }
 
     private async Task SaveProfile()

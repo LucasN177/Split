@@ -5,6 +5,8 @@
 @inject IGroupService GroupService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject ConnectivityService Connectivity
+@inject OfflineSyncService OfflineSync
 
 @if (!AuthService.IsAuthenticated)
 {
@@ -73,6 +75,19 @@ else
 
         <MudMainContent>
             <MudContainer MaxWidth="MaxWidth.Large" Class="split-page">
+                @if (!Connectivity.IsOnline)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Filled" Icon="@Icons.Material.Filled.CloudOff" Class="mb-4">
+                        Keine Internetverbindung – du siehst den zuletzt geladenen Stand.
+                    </MudAlert>
+                }
+                else if (OfflineSync.Pending.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Filled.CloudSync" Class="mb-4">
+                        @OfflineSync.Pending.Count offline erfasste Änderung(en) noch nicht übertragen.
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="SyncNow" Class="ml-2">Jetzt synchronisieren</MudButton>
+                    </MudAlert>
+                }
                 @Body
             </MudContainer>
         </MudMainContent>
@@ -98,6 +113,8 @@ else
     protected override async Task OnInitializedAsync()
     {
         AuthService.AuthStateChanged += OnStateChanged;
+        Connectivity.StatusChanged += OnConnectivityChanged;
+        OfflineSync.Changed += OnSyncChanged;
 
         if (AuthService.IsAuthenticated && GroupService.Groups.Count == 0)
         {
@@ -109,6 +126,27 @@ else
 
     private void OnStateChanged() => InvokeAsync(StateHasChanged);
 
+    private Task OnConnectivityChanged(bool online)
+    {
+        if (online)
+            Snackbar.Add("Wieder online.", Severity.Success);
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void OnSyncChanged(int synced)
+    {
+        if (synced > 0)
+            Snackbar.Add($"{synced} offline erfasste Änderung(en) synchronisiert.", Severity.Success);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SyncNow()
+    {
+        var synced = await OfflineSync.Sync();
+        if (synced == 0 && OfflineSync.Pending.FirstOrDefault(p => p.LastError is not null) is { } failed)
+            Snackbar.Add($"Synchronisation fehlgeschlagen: {failed.LastError}", Severity.Error);
+    }
+
     private async Task Logout()
     {
         await AuthService.Logout();
@@ -116,5 +154,10 @@ else
         Navigation.NavigateTo("login", replace: true);
     }
 
-    public void Dispose() => AuthService.AuthStateChanged -= OnStateChanged;
+    public void Dispose()
+    {
+        AuthService.AuthStateChanged -= OnStateChanged;
+        Connectivity.StatusChanged -= OnConnectivityChanged;
+        OfflineSync.Changed -= OnSyncChanged;
+    }
 }

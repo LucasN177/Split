@@ -4,7 +4,7 @@
     <TitleContent>
         <MudText Typo="Typo.h6">
             <MudIcon Icon="@Icons.Material.Filled.Payments" Class="mr-2" Style="vertical-align: middle;" />
-            Zahlung erfassen
+            @(Settlement is null ? "Zahlung erfassen" : "Zahlung bearbeiten")
         </MudText>
     </TitleContent>
     <DialogContent>
@@ -47,6 +47,10 @@
         </MudGrid>
     </DialogContent>
     <DialogActions>
+        @if (Settlement is not null && Details.CanDelete(Settlement.CreatedBy))
+        {
+            <MudButton Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="Delete" Disabled="_busy" Class="mr-auto">Löschen</MudButton>
+        }
         <MudButton OnClick="() => MudDialog.Cancel()">Abbrechen</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_busy" OnClick="Save">Speichern</MudButton>
     </DialogActions>
@@ -60,6 +64,9 @@
     /// <summary>Optionaler Vorschlag zum Vorbelegen.</summary>
     [Parameter] public TransferSuggestion? Suggestion { get; set; }
 
+    /// <summary>Bestehende Zahlung zum Bearbeiten.</summary>
+    [Parameter] public SettlementDto? Settlement { get; set; }
+
     private readonly SettlementDto _model = new();
     private bool _busy;
     private string? _error;
@@ -67,7 +74,16 @@
     protected override void OnInitialized()
     {
         _model.GroupId = Details.Group.Id;
-        if (Suggestion is not null)
+        if (Settlement is not null)
+        {
+            _model.Id = Settlement.Id;
+            _model.FromMember = Settlement.FromMember;
+            _model.ToMember = Settlement.ToMember;
+            _model.Amount = Settlement.Amount;
+            _model.Note = Settlement.Note ?? string.Empty;
+            _model.SettledAt = Settlement.SettledAt;
+        }
+        else if (Suggestion is not null)
         {
             _model.FromMember = Suggestion.FromMemberId;
             _model.ToMember = Suggestion.ToMemberId;
@@ -84,11 +100,28 @@
     {
         _busy = true;
         _error = null;
-        var result = await ExpenseService.AddSettlement(_model);
+        var result = await ExpenseService.SaveSettlement(_model);
+        _busy = false;
+
+        if (!result.IsSuccess)
+        {
+            _error = result.ErrorMessage;
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(result.Data!.Queued
+            ? "Offline gespeichert – wird synchronisiert, sobald du wieder online bist."
+            : Settlement is null ? "Zahlung erfasst." : "Zahlung gespeichert."));
+    }
+
+    private async Task Delete()
+    {
+        _busy = true;
+        var result = await ExpenseService.DeleteSettlement(_model.Id);
         _busy = false;
 
         if (result.IsSuccess)
-            MudDialog.Close(DialogResult.Ok(result.Data));
+            MudDialog.Close(DialogResult.Ok("Zahlung gelöscht."));
         else
             _error = result.ErrorMessage;
     }

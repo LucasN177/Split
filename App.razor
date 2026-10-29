@@ -1,6 +1,10 @@
 ﻿@implements IDisposable
 @inject AppStateService AppStateService
 @inject IAuthService AuthService
+@inject ConnectivityService Connectivity
+@inject OfflineSyncService OfflineSync
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
 @* Required *@
 <MudThemeProvider Theme="@Theme.Split" IsDarkMode="@AppStateService.IsDarkMode"/>
@@ -31,8 +35,45 @@ else
     {
         AppStateService.OnChange += StateHasChanged;
         await AppStateService.Initialize();
+        await Connectivity.Initialize();
         await AuthService.Initialize();
+        var redirect = await HandleAuthRedirect();
         AppStateService.FinishInitialization();
+
+        if (redirect is not null)
+            Navigation.NavigateTo(redirect, replace: true);
+
+        // Offline erfasste Änderungen übertragen (Meldung zeigt das Layout)
+        if (AuthService.IsAuthenticated)
+            await OfflineSync.Sync();
+    }
+
+    /// <summary>Verarbeitet Bestätigungs- und Passwort-Links aus E-Mails. Gibt das Navigationsziel zurück.</summary>
+    private async Task<string?> HandleAuthRedirect()
+    {
+        var uri = new Uri(Navigation.Uri);
+        if (string.IsNullOrEmpty(uri.Fragment) || uri.Fragment.Length < 2)
+            return null;
+
+        var result = await AuthService.HandleAuthRedirect(uri);
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add($"Link konnte nicht verarbeitet werden: {result.ErrorMessage}", Severity.Error);
+            return "login";
+        }
+
+        return result.Data switch
+        {
+            null => null,
+            "recovery" => "reset-password",
+            _ => ConfirmedRedirect()
+        };
+    }
+
+    private string ConfirmedRedirect()
+    {
+        Snackbar.Add("E-Mail-Adresse bestätigt – willkommen bei Split!", Severity.Success);
+        return "";
     }
 
     public void Dispose() => AppStateService.OnChange -= StateHasChanged;

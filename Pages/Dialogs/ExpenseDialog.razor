@@ -1,5 +1,9 @@
+@using Split.Core.Models.Enums
+@using Microsoft.AspNetCore.Components.Forms
 @inject IExpenseService ExpenseService
 @inject IAuthService AuthService
+@inject ConnectivityService Connectivity
+@inject IJSRuntime JS
 
 <MudDialog>
     <TitleContent>
@@ -13,22 +17,56 @@
         {
             <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
         }
+        @if (!Connectivity.IsOnline && IsNew)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">Du bist offline – die Ausgabe wird gespeichert, sobald wieder eine Verbindung besteht.</MudAlert>
+        }
 
         <MudGrid Spacing="2">
             <MudItem xs="12">
                 <MudTextField @bind-Value="_model.Title" Label="Wofür?" Variant="Variant.Outlined" AutoFocus="@IsNew"
                               Placeholder="z.B. Abendessen" MaxLength="100" />
             </MudItem>
-            <MudItem xs="7">
-                <MudNumericField T="decimal" Value="_model.Amount" ValueChanged="OnAmountChanged"
+            <MudItem xs="7" sm="5">
+                <MudNumericField T="decimal" Value="_inputAmount" ValueChanged="OnAmountChanged"
                                  Label="Betrag" Variant="Variant.Outlined" Min="0" Format="N2" Culture="Money.Culture"
-                                 HideSpinButtons="true" Immediate="false"
-                                 Adornment="Adornment.End" AdornmentText="@Money.Symbol(Details.Group.Currency)" />
+                                 HideSpinButtons="true"
+                                 Adornment="Adornment.End" AdornmentText="@Money.Symbol(_currency)" />
             </MudItem>
-            <MudItem xs="5">
+            <MudItem xs="5" sm="3">
+                <MudSelect T="string" Value="_currency" ValueChanged="OnCurrencyChanged" Label="Währung" Variant="Variant.Outlined">
+                    @foreach (var currency in Money.Currencies)
+                    {
+                        <MudSelectItem Value="@currency">@currency</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
                 <MudDatePicker Date="_model.ExpenseDate" DateChanged="d => _model.ExpenseDate = d ?? DateTime.Today"
-                               Label="Datum" Variant="Variant.Outlined" Culture="Money.Culture" DateFormat="dd.MM.yyyy" />
+                               Label="@(_repeat ? "Erste Ausführung" : "Datum")" Variant="Variant.Outlined" Culture="Money.Culture" DateFormat="dd.MM.yyyy" />
             </MudItem>
+
+            @if (IsForeign)
+            {
+                <MudItem xs="12">
+                    <MudPaper Outlined="true" Class="pa-3">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                            <MudText Typo="Typo.body2">1 @_currency =</MudText>
+                            <div style="width: 9rem;">
+                                <MudNumericField T="decimal" Value="_rate" ValueChanged="v => _rate = v" Variant="Variant.Text" Margin="Margin.Dense"
+                                                 Min="0" Format="N4" Culture="Money.Culture" HideSpinButtons="true"
+                                                 Adornment="Adornment.End" AdornmentText="@GroupCurrency" />
+                            </div>
+                            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" aria-label="Kurs aktualisieren"
+                                           Disabled="_loadingRate" OnClick="LoadRate" />
+                            <MudSpacer />
+                            <MudText Typo="Typo.subtitle2">= @Money.Format(GroupAmount, GroupCurrency)</MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Kurs der Europäischen Zentralbank, kann angepasst werden.</MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+
             <MudItem xs="12" sm="6">
                 <MudSelect T="string" @bind-Value="_model.PaidBy" Label="Bezahlt von" Variant="Variant.Outlined">
                     @foreach (var member in Details.Members)
@@ -49,11 +87,14 @@
             </MudItem>
         </MudGrid>
 
-        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mt-6 mb-2">
-            <MudText Typo="Typo.subtitle1">Aufteilen auf</MudText>
-            <MudToggleGroup T="bool" Value="_custom" ValueChanged="OnModeChanged" Size="Size.Small" Color="Color.Primary" Outlined="true">
-                <MudToggleItem Value="false" Text="Gleichmäßig" />
-                <MudToggleItem Value="true" Text="Individuell" />
+        @* ---------- Aufteilung ---------- *@
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap" Class="mt-6 mb-2">
+            <MudText Typo="Typo.subtitle1">Aufteilen</MudText>
+            <MudToggleGroup T="string" Value="_mode" ValueChanged="OnModeChanged" Size="Size.Small" Color="Color.Primary" Outlined="true">
+                <MudToggleItem Value="@SplitMode.Equal" Text="Gleich" />
+                <MudToggleItem Value="@SplitMode.Amount" Text="Beträge" />
+                <MudToggleItem Value="@SplitMode.Percent" Text="%" />
+                <MudToggleItem Value="@SplitMode.Shares" Text="Anteile" />
             </MudToggleGroup>
         </MudStack>
 
@@ -62,46 +103,95 @@
             {
                 var id = member.Id;
                 <div class="split-row" style="padding-top: 0.25rem; padding-bottom: 0.25rem;">
-                    <MudCheckBox T="bool" Value="_selected.Contains(id)" ValueChanged="v => ToggleMember(id, v)" Color="Color.Primary" Dense="true" />
-                    <div class="split-row-main text-truncate">@member.DisplayName</div>
-                    @if (_custom)
+                    @if (_mode == SplitMode.Equal)
                     {
-                        <div style="width: 8.5rem;">
-                            <MudNumericField T="decimal" Value="_customShares.GetValueOrDefault(id)" ValueChanged="v => SetCustomShare(id, v)"
-                                             Variant="Variant.Text" Margin="Margin.Dense" Min="0" Format="N2" Culture="Money.Culture"
-                                             HideSpinButtons="true" Disabled="!_selected.Contains(id)"
-                                             Adornment="Adornment.End" AdornmentText="@Money.Symbol(Details.Group.Currency)" />
+                        <MudCheckBox T="bool" Value="_selected.Contains(id)" ValueChanged="v => ToggleMember(id, v)" Color="Color.Primary" Dense="true" />
+                    }
+                    <div class="split-row-main text-truncate">@member.DisplayName</div>
+                    @if (_mode != SplitMode.Equal)
+                    {
+                        <div style="width: 7.5rem;">
+                            <MudNumericField T="decimal" Value="_values.GetValueOrDefault(id)" ValueChanged="v => _values[id] = Math.Max(0, v)"
+                                             Variant="Variant.Text" Margin="Margin.Dense" Min="0" Culture="Money.Culture"
+                                             Format="@(_mode == SplitMode.Shares ? "0.##" : "N2")" HideSpinButtons="@(_mode != SplitMode.Shares)"
+                                             Adornment="Adornment.End" AdornmentText="@ValueSuffix" />
                         </div>
                     }
-                    else
-                    {
-                        <MudText Class="mud-text-secondary" Typo="Typo.body2" Style="white-space: nowrap;">
-                            @Money.Format(EvenShares.GetValueOrDefault(id), Details.Group.Currency)
-                        </MudText>
-                    }
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="white-space: nowrap; min-width: 5.5rem; text-align: right;">
+                        @Money.Format(Preview.GetValueOrDefault(id), GroupCurrency)
+                    </MudText>
                 </div>
             }
         </MudPaper>
-
-        @if (_custom)
+        @if (SplitHint is { } hint)
         {
-            var diff = _model.Amount - CustomSum;
-            <MudText Typo="Typo.body2" Class="mt-2" Color="@(diff == 0 ? Color.Success : Color.Warning)">
-                @(diff == 0 ? "Betrag vollständig aufgeteilt ✓" : diff > 0 ? $"Noch {Money.Format(diff, Details.Group.Currency)} zu verteilen" : $"{Money.Format(-diff, Details.Group.Currency)} zu viel verteilt")
-            </MudText>
+            <MudText Typo="Typo.body2" Class="mt-2" Color="@(hint.Ok ? Color.Success : Color.Warning)">@hint.Text</MudText>
+        }
+
+        @* ---------- Notiz & Beleg ---------- *@
+        <MudTextField @bind-Value="_model.Note" Label="Notiz (optional)" Variant="Variant.Outlined" Lines="2" MaxLength="500" Class="mt-6" />
+
+        @if (!_repeat)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-3" Wrap="Wrap.Wrap">
+                @if (!string.IsNullOrEmpty(_model.ReceiptPath))
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Image" Size="Size.Small" OnClick="OpenReceipt">Beleg ansehen</MudButton>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Beleg entfernen" OnClick="() => _model.ReceiptPath = null" />
+                }
+                else
+                {
+                    <MudFileUpload T="IBrowserFile" FilesChanged="UploadReceipt" Accept="image/*,application/pdf" MaxFileSize="@MaxReceiptSize"
+                                   Disabled="@(_uploading || !Connectivity.IsOnline)">
+                        <CustomContent>
+                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AddAPhoto" Size="Size.Small"
+                                       Disabled="@(_uploading || !Connectivity.IsOnline)" OnClick="@context.OpenFilePickerAsync">
+                                @(_uploading ? "Wird hochgeladen …" : "Beleg hinzufügen")
+                            </MudButton>
+                        </CustomContent>
+                    </MudFileUpload>
+                }
+            </MudStack>
+        }
+
+        @* ---------- Wiederholung ---------- *@
+        @if (IsNew && Connectivity.IsOnline)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mt-4" Wrap="Wrap.Wrap">
+                <MudSwitch T="bool" @bind-Value="_repeat" Color="Color.Primary" Label="Wiederholen" />
+                @if (_repeat)
+                {
+                    <div style="width: 10rem;">
+                        <MudSelect T="string" @bind-Value="_interval" Variant="Variant.Outlined" Margin="Margin.Dense">
+                            @foreach (var interval in RepeatInterval.All)
+                            {
+                                <MudSelectItem Value="@interval">@RepeatInterval.Label(interval)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
+                }
+            </MudStack>
+            @if (_repeat)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Die Ausgabe wird ab dem gewählten Datum automatisch angelegt (z.B. Miete, Abos).
+                </MudText>
+            }
         }
     </DialogContent>
     <DialogActions>
-        @if (!IsNew)
+        @if (!IsNew && Details.CanDelete(Expense!.CreatedBy))
         {
             <MudButton Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="Delete" Disabled="_busy" Class="mr-auto">Löschen</MudButton>
         }
         <MudButton OnClick="() => MudDialog.Cancel()">Abbrechen</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_busy" OnClick="Save">Speichern</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_busy || _uploading)" OnClick="Save">Speichern</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
+    private const long MaxReceiptSize = 5 * 1024 * 1024;
+
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public GroupDetails Details { get; set; } = null!;
@@ -110,23 +200,72 @@
     [Parameter] public ExpenseDto? Expense { get; set; }
 
     private ExpenseDto _model = new();
+    private string _mode = SplitMode.Equal;
     private readonly HashSet<string> _selected = [];
-    private readonly Dictionary<string, decimal> _customShares = [];
-    private bool _custom;
+    private readonly Dictionary<string, decimal> _values = [];
+    private decimal _inputAmount;
+    private string _currency = "EUR";
+    private decimal _rate = 1;
+    private bool _repeat;
+    private string _interval = RepeatInterval.Monthly;
     private bool _busy;
+    private bool _uploading;
+    private bool _loadingRate;
     private string? _error;
 
     private bool IsNew => Expense is null;
+    private string GroupCurrency => Details.Group.Currency;
+    private bool IsForeign => _currency != GroupCurrency;
 
-    /// <summary>Ausgewählte Mitglieder in stabiler Reihenfolge.</summary>
-    private List<string> SelectedIds => Details.Members.Select(m => m.Id).Where(_selected.Contains).ToList();
+    /// <summary>Betrag in Gruppenwährung (Grundlage der Aufteilung).</summary>
+    private decimal GroupAmount => IsForeign ? Math.Round(_inputAmount * _rate, 2) : _inputAmount;
 
-    private Dictionary<string, decimal> EvenShares => BalanceCalculator.SplitEvenly(_model.Amount, SelectedIds);
+    private string ValueSuffix => _mode switch
+    {
+        SplitMode.Percent => "%",
+        SplitMode.Shares => "×",
+        _ => Money.Symbol(GroupCurrency)
+    };
 
-    private decimal CustomSum => SelectedIds.Sum(id => _customShares.GetValueOrDefault(id));
+    private List<KeyValuePair<string, decimal>> Inputs => _mode == SplitMode.Equal
+        ? Details.Members.Where(m => _selected.Contains(m.Id)).Select(m => new KeyValuePair<string, decimal>(m.Id, 1)).ToList()
+        : Details.Members.Select(m => new KeyValuePair<string, decimal>(m.Id, _values.GetValueOrDefault(m.Id))).ToList();
+
+    private Dictionary<string, decimal> Preview => _mode switch
+    {
+        SplitMode.Equal => BalanceCalculator.SplitEvenly(GroupAmount, Inputs.Select(i => i.Key).ToList()),
+        SplitMode.Amount => Inputs.ToDictionary(i => i.Key, i => i.Value),
+        _ => BalanceCalculator.SplitByWeights(GroupAmount, Inputs)
+    };
+
+    private (bool Ok, string Text)? SplitHint
+    {
+        get
+        {
+            var currency = GroupCurrency;
+            switch (_mode)
+            {
+                case SplitMode.Amount:
+                    var diff = GroupAmount - Inputs.Sum(i => i.Value);
+                    return diff == 0
+                        ? (true, "Betrag vollständig aufgeteilt ✓")
+                        : (false, diff > 0 ? $"Noch {Money.Format(diff, currency)} zu verteilen" : $"{Money.Format(-diff, currency)} zu viel verteilt");
+                case SplitMode.Percent:
+                    var percent = Inputs.Sum(i => i.Value);
+                    return percent == 100 ? (true, "100 % verteilt ✓") : (false, $"{percent:0.##} % von 100 % verteilt");
+                case SplitMode.Shares:
+                    var shares = Inputs.Sum(i => i.Value);
+                    return (shares > 0, $"{shares:0.##} Anteile insgesamt");
+                default:
+                    return null;
+            }
+        }
+    }
 
     protected override void OnInitialized()
     {
+        _currency = GroupCurrency;
+
         if (Expense is not null)
         {
             _model = new ExpenseDto
@@ -137,45 +276,83 @@
                 Amount = Expense.Amount,
                 PaidBy = Expense.PaidBy,
                 Category = Expense.Category,
-                ExpenseDate = Expense.ExpenseDate
+                ExpenseDate = Expense.ExpenseDate,
+                Note = Expense.Note,
+                ReceiptPath = Expense.ReceiptPath,
+                SplitMode = Expense.SplitMode,
+                CreatedBy = Expense.CreatedBy
             };
+            _mode = Expense.SplitMode;
 
-            var shares = Details.Shares.Where(s => s.ExpenseId == Expense.Id).ToList();
-            foreach (var share in shares)
+            if (Expense.IsForeignCurrency)
             {
-                _selected.Add(share.MemberId);
-                _customShares[share.MemberId] = share.Amount;
+                _currency = Expense.OriginalCurrency!;
+                _inputAmount = Expense.OriginalAmount!.Value;
+                _rate = Expense.ExchangeRate;
+            }
+            else
+            {
+                _inputAmount = Expense.Amount;
             }
 
-            // Individuell, wenn die gespeicherte Aufteilung nicht der gleichmäßigen entspricht
-            var even = BalanceCalculator.SplitEvenly(_model.Amount, SelectedIds);
-            _custom = shares.Any(s => even.GetValueOrDefault(s.MemberId) != s.Amount);
+            foreach (var share in Details.Shares.Where(s => s.ExpenseId == Expense.Id))
+            {
+                _selected.Add(share.MemberId);
+                _values[share.MemberId] = _mode is SplitMode.Percent or SplitMode.Shares ? share.Weight ?? 0 : share.Amount;
+            }
         }
         else
         {
             _model.GroupId = Details.Group.Id;
-            _model.PaidBy = Details.Members.FirstOrDefault(m => m.UserId == AuthService.CurrentUser?.Id)?.Id
-                            ?? Details.Members.FirstOrDefault()?.Id
-                            ?? string.Empty;
+            _model.PaidBy = Details.Me?.Id ?? Details.Members.FirstOrDefault()?.Id ?? string.Empty;
             foreach (var member in Details.Members)
                 _selected.Add(member.Id);
         }
     }
 
-    private void OnAmountChanged(decimal value)
+    private void OnAmountChanged(decimal value) => _inputAmount = Math.Round(value, 2);
+
+    private async Task OnCurrencyChanged(string currency)
     {
-        _model.Amount = Math.Round(value, 2);
+        _currency = currency;
+        _rate = 1;
+        if (IsForeign)
+            await LoadRate();
     }
 
-    private void OnModeChanged(bool custom)
+    private async Task LoadRate()
     {
-        _custom = custom;
-        if (custom)
+        _loadingRate = true;
+        var result = await ExpenseService.GetExchangeRate(_currency, GroupCurrency);
+        _loadingRate = false;
+        if (result.IsSuccess)
+            _rate = Math.Round(result.Data, 6);
+        else
+            _error = "Wechselkurs konnte nicht geladen werden – bitte manuell eintragen.";
+    }
+
+    private void OnModeChanged(string mode)
+    {
+        var previous = Preview;
+        _mode = mode;
+        _values.Clear();
+        var participants = Details.Members.Where(m => previous.ContainsKey(m.Id)).ToList();
+
+        // Sinnvoll vorbelegen, damit der Wechsel ohne Neueingabe funktioniert
+        foreach (var member in participants)
         {
-            // Mit gleichmäßiger Aufteilung vorbelegen
-            foreach (var (id, amount) in EvenShares)
-                _customShares[id] = amount;
+            _values[member.Id] = mode switch
+            {
+                SplitMode.Amount => previous[member.Id],
+                SplitMode.Percent => participants.Count == 0 ? 0 : Math.Round(100m / participants.Count, 2),
+                SplitMode.Shares => 1,
+                _ => 0
+            };
         }
+
+        // Rundungsrest bei Prozent dem ersten Mitglied zuschlagen, damit es genau 100 % sind
+        if (mode == SplitMode.Percent && participants.Count > 0)
+            _values[participants[0].Id] += 100 - participants.Sum(p => _values[p.Id]);
     }
 
     private void ToggleMember(string id, bool selected)
@@ -184,32 +361,98 @@
         else _selected.Remove(id);
     }
 
-    private void SetCustomShare(string id, decimal value) => _customShares[id] = Math.Round(value, 2);
+    private async Task UploadReceipt(IBrowserFile? file)
+    {
+        if (file is null) return;
+        if (file.Size > MaxReceiptSize)
+        {
+            _error = "Der Beleg darf maximal 5 MB groß sein.";
+            return;
+        }
+
+        _uploading = true;
+        _error = null;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxReceiptSize);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            var result = await ExpenseService.UploadReceipt(Details.Group.Id, memory.ToArray(), file.Name, file.ContentType);
+            if (result.IsSuccess)
+                _model.ReceiptPath = result.Data;
+            else
+                _error = $"Upload fehlgeschlagen: {result.ErrorMessage}";
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private async Task OpenReceipt()
+    {
+        var result = await ExpenseService.GetReceiptUrl(_model.ReceiptPath!);
+        if (result.IsSuccess)
+            await JS.InvokeVoidAsync("open", result.Data, "_blank");
+        else
+            _error = result.ErrorMessage;
+    }
 
     private async Task Save()
     {
         _busy = true;
         _error = null;
 
-        var result = _custom
-            ? await ExpenseService.SaveExpense(_model, SelectedIds.ToDictionary(id => id, id => _customShares.GetValueOrDefault(id)))
-            : await ExpenseService.SaveExpense(_model, SelectedIds);
+        _model.SplitMode = _mode;
+        _model.Amount = GroupAmount;
+        _model.OriginalAmount = IsForeign ? _inputAmount : null;
+        _model.OriginalCurrency = IsForeign ? _currency : null;
+        _model.ExchangeRate = IsForeign ? _rate : 1;
 
+        if (_repeat)
+        {
+            var recurring = new RecurringExpenseDto
+            {
+                GroupId = Details.Group.Id,
+                Title = _model.Title,
+                Amount = _model.Amount,
+                PaidBy = _model.PaidBy,
+                Category = _model.Category,
+                SplitMode = _mode,
+                RepeatInterval = _interval,
+                NextDate = _model.ExpenseDate
+            };
+            var recurringResult = await ExpenseService.SaveRecurring(recurring, Inputs);
+            _busy = false;
+            if (recurringResult.IsSuccess)
+                MudDialog.Close(DialogResult.Ok($"Wiederkehrende Ausgabe ({RepeatInterval.Label(_interval)}) angelegt."));
+            else
+                _error = recurringResult.ErrorMessage;
+            return;
+        }
+
+        var result = await ExpenseService.SaveExpense(_model, Inputs);
         _busy = false;
-        if (result.IsSuccess)
-            MudDialog.Close(DialogResult.Ok(result.Data));
-        else
+
+        if (!result.IsSuccess)
+        {
             _error = result.ErrorMessage;
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(result.Data!.Queued
+            ? "Offline gespeichert – wird synchronisiert, sobald du wieder online bist."
+            : "Ausgabe gespeichert."));
     }
 
     private async Task Delete()
     {
         _busy = true;
-        var result = await ExpenseService.DeleteExpense(_model.Id);
+        var result = await ExpenseService.DeleteExpense(Expense!);
         _busy = false;
 
         if (result.IsSuccess)
-            MudDialog.Close(DialogResult.Ok(true));
+            MudDialog.Close(DialogResult.Ok("Ausgabe gelöscht."));
         else
             _error = result.ErrorMessage;
     }
