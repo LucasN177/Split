@@ -108,25 +108,7 @@ Lokal werden die Werte aus wwwroot/appsettings.Development.json gelesen:
   }
 }
 
-Für das Deployment auf GitHub Pages werden die Werte aus den Repository-Secrets SUPABASE_URL und SUPABASE_KEY beim Build in wwwroot/appsettings.json geschrieben (siehe .github/workflows/deploy.yml). Echte Schlüssel gehören nie in appsettings.json.
-
 Damit Bestätigungs- und Passwort-Links funktionieren, die GitHub-Pages-URL in Supabase unter Authentication → URL Configuration als Site URL bzw. Redirect URL eintragen.
-
-Anwendung starten
-
-dotnet restore
-dotnet run
-
-Die Anwendung ist anschließend unter http://localhost:5046 verfügbar.
-
-Tests ausführen
-
-dotnet test tests/Split.Tests
-
-Optionale Einrichtung
-
-* Push-Benachrichtigungen: docs/push-notifications.md
-* Veröffentlichung in App Stores: docs/app-stores.md
 
 ⸻
 
@@ -184,17 +166,6 @@ Sicherheit
 
 ⸻
 
-Beitrag leisten
-
-Beiträge, Verbesserungsvorschläge und Bug Reports sind willkommen.
-
-1. Fork erstellen
-2. Feature Branch anlegen
-3. Änderungen committen
-4. Pull Request erstellen
-
-⸻
-
 Lizenz
 
 Dieses Projekt steht unter der MIT-Lizenz.
@@ -202,5 +173,3 @@ Dieses Projekt steht unter der MIT-Lizenz.
 ⸻
 
 Lucas Nagelsmann
-
-Entwickelt mit ❤️ für eine einfachere und transparentere Verwaltung gemeinsamer Ausgaben.
