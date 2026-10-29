@@ -1,0 +1,95 @@
+@inject IExpenseService ExpenseService
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Payments" Class="mr-2" Style="vertical-align: middle;" />
+            Zahlung erfassen
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
+        }
+
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" @bind-Value="_model.FromMember" Label="Von" Variant="Variant.Outlined">
+                    @foreach (var member in Details.Members)
+                    {
+                        <MudSelectItem Value="@member.Id">@member.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" @bind-Value="_model.ToMember" Label="An" Variant="Variant.Outlined">
+                    @foreach (var member in Details.Members)
+                    {
+                        <MudSelectItem Value="@member.Id">@member.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="7">
+                <MudNumericField T="decimal" Value="_model.Amount" ValueChanged="v => _model.Amount = Math.Round(v, 2)"
+                                 Label="Betrag" Variant="Variant.Outlined" Min="0" Format="N2" Culture="Money.Culture"
+                                 HideSpinButtons="true"
+                                 Adornment="Adornment.End" AdornmentText="@Money.Symbol(Details.Group.Currency)" />
+            </MudItem>
+            <MudItem xs="5">
+                <MudDatePicker Date="_model.SettledAt" DateChanged="d => _model.SettledAt = d ?? DateTime.Today"
+                               Label="Datum" Variant="Variant.Outlined" Culture="Money.Culture" DateFormat="dd.MM.yyyy" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_model.Note" Label="Notiz (optional)" Variant="Variant.Outlined"
+                              Placeholder="z.B. PayPal" MaxLength="120" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Abbrechen</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_busy" OnClick="Save">Speichern</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public GroupDetails Details { get; set; } = null!;
+
+    /// <summary>Optionaler Vorschlag zum Vorbelegen.</summary>
+    [Parameter] public TransferSuggestion? Suggestion { get; set; }
+
+    private readonly SettlementDto _model = new();
+    private bool _busy;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _model.GroupId = Details.Group.Id;
+        if (Suggestion is not null)
+        {
+            _model.FromMember = Suggestion.FromMemberId;
+            _model.ToMember = Suggestion.ToMemberId;
+            _model.Amount = Suggestion.Amount;
+        }
+        else
+        {
+            _model.FromMember = Details.Members.ElementAtOrDefault(0)?.Id ?? string.Empty;
+            _model.ToMember = Details.Members.ElementAtOrDefault(1)?.Id ?? string.Empty;
+        }
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        _error = null;
+        var result = await ExpenseService.AddSettlement(_model);
+        _busy = false;
+
+        if (result.IsSuccess)
+            MudDialog.Close(DialogResult.Ok(result.Data));
+        else
+            _error = result.ErrorMessage;
+    }
+}

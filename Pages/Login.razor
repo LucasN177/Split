@@ -1,0 +1,101 @@
+@page "/login"
+@layout AuthLayout
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Anmelden – Split</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1">Willkommen zurück</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">Melde dich an, um deine Gruppen zu sehen.</MudText>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
+}
+
+<MudForm @ref="_form" @bind-IsValid="_isValid">
+    <MudTextField @bind-Value="_email" Label="E-Mail" Variant="Variant.Outlined" InputType="InputType.Email" Immediate="true"
+                  Required="true" RequiredError="Bitte E-Mail angeben" AutoFocus="true"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Email" Class="mb-3"
+                  OnKeyDown="OnKeyDown" />
+    <MudTextField @bind-Value="_password" Label="Passwort" Variant="Variant.Outlined" Immediate="true"
+                  InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                  Required="true" RequiredError="Bitte Passwort angeben"
+                  Adornment="Adornment.End" AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                  OnAdornmentClick="() => _showPassword = !_showPassword" AdornmentAriaLabel="Passwort anzeigen"
+                  OnKeyDown="OnKeyDown" />
+</MudForm>
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-1 mb-4">
+    <MudLink Href="forgot-password" Typo="Typo.body2">Passwort vergessen?</MudLink>
+</MudStack>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+           Disabled="_busy" OnClick="Submit">
+    @if (_busy)
+    {
+        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+        <span>Anmelden …</span>
+    }
+    else
+    {
+        <span>Anmelden</span>
+    }
+</MudButton>
+
+<MudDivider Class="my-6" />
+
+<MudText Align="Align.Center" Typo="Typo.body2">
+    Noch kein Konto? <MudLink Href="register">Jetzt registrieren</MudLink>
+</MudText>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private MudForm _form = null!;
+    private bool _isValid;
+    private bool _busy;
+    private bool _showPassword;
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        if (AuthService.IsAuthenticated)
+            Navigation.NavigateTo(SafeReturnUrl, replace: true);
+    }
+
+    private string SafeReturnUrl =>
+        string.IsNullOrEmpty(ReturnUrl) || ReturnUrl.Contains("://") || ReturnUrl.StartsWith("//") || ReturnUrl.StartsWith("login")
+            ? ""
+            : ReturnUrl;
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+            await Submit();
+    }
+
+    private async Task Submit()
+    {
+        if (_busy) return;
+        await _form.ValidateAsync();
+        if (!_isValid) return;
+
+        _busy = true;
+        _error = null;
+        var result = await AuthService.Login(_email, _password);
+        _busy = false;
+
+        if (!result.IsSuccess)
+        {
+            _error = result.ErrorMessage;
+            return;
+        }
+
+        Snackbar.Add("Erfolgreich angemeldet.", Severity.Success);
+        Navigation.NavigateTo(SafeReturnUrl, replace: true);
+    }
+}

@@ -1,0 +1,9 @@
+@* Ladeanzeige innerhalb einer Seite *@
+<MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Class="py-16">
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    <MudText Typo="Typo.body2" Color="Color.Secondary">@Text</MudText>
+</MudStack>
+
+@code {
+    [Parameter] public string Text { get; set; } = "Wird geladen …";
+}

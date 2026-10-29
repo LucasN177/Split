@@ -1,0 +1,216 @@
+@inject IExpenseService ExpenseService
+@inject IAuthService AuthService
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Receipt" Class="mr-2" Style="vertical-align: middle;" />
+            @(IsNew ? "Neue Ausgabe" : "Ausgabe bearbeiten")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
+        }
+
+        <MudGrid Spacing="2">
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_model.Title" Label="Wofür?" Variant="Variant.Outlined" AutoFocus="@IsNew"
+                              Placeholder="z.B. Abendessen" MaxLength="100" />
+            </MudItem>
+            <MudItem xs="7">
+                <MudNumericField T="decimal" Value="_model.Amount" ValueChanged="OnAmountChanged"
+                                 Label="Betrag" Variant="Variant.Outlined" Min="0" Format="N2" Culture="Money.Culture"
+                                 HideSpinButtons="true" Immediate="false"
+                                 Adornment="Adornment.End" AdornmentText="@Money.Symbol(Details.Group.Currency)" />
+            </MudItem>
+            <MudItem xs="5">
+                <MudDatePicker Date="_model.ExpenseDate" DateChanged="d => _model.ExpenseDate = d ?? DateTime.Today"
+                               Label="Datum" Variant="Variant.Outlined" Culture="Money.Culture" DateFormat="dd.MM.yyyy" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" @bind-Value="_model.PaidBy" Label="Bezahlt von" Variant="Variant.Outlined">
+                    @foreach (var member in Details.Members)
+                    {
+                        <MudSelectItem Value="@member.Id">@member.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" @bind-Value="_model.Category" Label="Kategorie" Variant="Variant.Outlined">
+                    @foreach (var category in Money.Categories)
+                    {
+                        <MudSelectItem Value="@category">
+                            <MudIcon Icon="@Money.CategoryIcon(category)" Size="Size.Small" Class="mr-2" Style="vertical-align: middle;" />@category
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mt-6 mb-2">
+            <MudText Typo="Typo.subtitle1">Aufteilen auf</MudText>
+            <MudToggleGroup T="bool" Value="_custom" ValueChanged="OnModeChanged" Size="Size.Small" Color="Color.Primary" Outlined="true">
+                <MudToggleItem Value="false" Text="Gleichmäßig" />
+                <MudToggleItem Value="true" Text="Individuell" />
+            </MudToggleGroup>
+        </MudStack>
+
+        <MudPaper Outlined="true">
+            @foreach (var member in Details.Members)
+            {
+                var id = member.Id;
+                <div class="split-row" style="padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                    <MudCheckBox T="bool" Value="_selected.Contains(id)" ValueChanged="v => ToggleMember(id, v)" Color="Color.Primary" Dense="true" />
+                    <div class="split-row-main text-truncate">@member.DisplayName</div>
+                    @if (_custom)
+                    {
+                        <div style="width: 8.5rem;">
+                            <MudNumericField T="decimal" Value="_customShares.GetValueOrDefault(id)" ValueChanged="v => SetCustomShare(id, v)"
+                                             Variant="Variant.Text" Margin="Margin.Dense" Min="0" Format="N2" Culture="Money.Culture"
+                                             HideSpinButtons="true" Disabled="!_selected.Contains(id)"
+                                             Adornment="Adornment.End" AdornmentText="@Money.Symbol(Details.Group.Currency)" />
+                        </div>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Style="white-space: nowrap;">
+                            @Money.Format(EvenShares.GetValueOrDefault(id), Details.Group.Currency)
+                        </MudText>
+                    }
+                </div>
+            }
+        </MudPaper>
+
+        @if (_custom)
+        {
+            var diff = _model.Amount - CustomSum;
+            <MudText Typo="Typo.body2" Class="mt-2" Color="@(diff == 0 ? Color.Success : Color.Warning)">
+                @(diff == 0 ? "Betrag vollständig aufgeteilt ✓" : diff > 0 ? $"Noch {Money.Format(diff, Details.Group.Currency)} zu verteilen" : $"{Money.Format(-diff, Details.Group.Currency)} zu viel verteilt")
+            </MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (!IsNew)
+        {
+            <MudButton Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="Delete" Disabled="_busy" Class="mr-auto">Löschen</MudButton>
+        }
+        <MudButton OnClick="() => MudDialog.Cancel()">Abbrechen</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_busy" OnClick="Save">Speichern</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public GroupDetails Details { get; set; } = null!;
+
+    /// <summary>Bestehende Ausgabe zum Bearbeiten – null für eine neue Ausgabe.</summary>
+    [Parameter] public ExpenseDto? Expense { get; set; }
+
+    private ExpenseDto _model = new();
+    private readonly HashSet<string> _selected = [];
+    private readonly Dictionary<string, decimal> _customShares = [];
+    private bool _custom;
+    private bool _busy;
+    private string? _error;
+
+    private bool IsNew => Expense is null;
+
+    /// <summary>Ausgewählte Mitglieder in stabiler Reihenfolge.</summary>
+    private List<string> SelectedIds => Details.Members.Select(m => m.Id).Where(_selected.Contains).ToList();
+
+    private Dictionary<string, decimal> EvenShares => BalanceCalculator.SplitEvenly(_model.Amount, SelectedIds);
+
+    private decimal CustomSum => SelectedIds.Sum(id => _customShares.GetValueOrDefault(id));
+
+    protected override void OnInitialized()
+    {
+        if (Expense is not null)
+        {
+            _model = new ExpenseDto
+            {
+                Id = Expense.Id,
+                GroupId = Expense.GroupId,
+                Title = Expense.Title,
+                Amount = Expense.Amount,
+                PaidBy = Expense.PaidBy,
+                Category = Expense.Category,
+                ExpenseDate = Expense.ExpenseDate
+            };
+
+            var shares = Details.Shares.Where(s => s.ExpenseId == Expense.Id).ToList();
+            foreach (var share in shares)
+            {
+                _selected.Add(share.MemberId);
+                _customShares[share.MemberId] = share.Amount;
+            }
+
+            // Individuell, wenn die gespeicherte Aufteilung nicht der gleichmäßigen entspricht
+            var even = BalanceCalculator.SplitEvenly(_model.Amount, SelectedIds);
+            _custom = shares.Any(s => even.GetValueOrDefault(s.MemberId) != s.Amount);
+        }
+        else
+        {
+            _model.GroupId = Details.Group.Id;
+            _model.PaidBy = Details.Members.FirstOrDefault(m => m.UserId == AuthService.CurrentUser?.Id)?.Id
+                            ?? Details.Members.FirstOrDefault()?.Id
+                            ?? string.Empty;
+            foreach (var member in Details.Members)
+                _selected.Add(member.Id);
+        }
+    }
+
+    private void OnAmountChanged(decimal value)
+    {
+        _model.Amount = Math.Round(value, 2);
+    }
+
+    private void OnModeChanged(bool custom)
+    {
+        _custom = custom;
+        if (custom)
+        {
+            // Mit gleichmäßiger Aufteilung vorbelegen
+            foreach (var (id, amount) in EvenShares)
+                _customShares[id] = amount;
+        }
+    }
+
+    private void ToggleMember(string id, bool selected)
+    {
+        if (selected) _selected.Add(id);
+        else _selected.Remove(id);
+    }
+
+    private void SetCustomShare(string id, decimal value) => _customShares[id] = Math.Round(value, 2);
+
+    private async Task Save()
+    {
+        _busy = true;
+        _error = null;
+
+        var result = _custom
+            ? await ExpenseService.SaveExpense(_model, SelectedIds.ToDictionary(id => id, id => _customShares.GetValueOrDefault(id)))
+            : await ExpenseService.SaveExpense(_model, SelectedIds);
+
+        _busy = false;
+        if (result.IsSuccess)
+            MudDialog.Close(DialogResult.Ok(result.Data));
+        else
+            _error = result.ErrorMessage;
+    }
+
+    private async Task Delete()
+    {
+        _busy = true;
+        var result = await ExpenseService.DeleteExpense(_model.Id);
+        _busy = false;
+
+        if (result.IsSuccess)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            _error = result.ErrorMessage;
+    }
+}

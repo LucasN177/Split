@@ -1,38 +1,54 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Split – gemeinsame Ausgaben einfach aufteilen" />
+    <meta name="theme-color" content="#F97316" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Split</title>
     <base href="/" />
     <link rel="preload" id="webassembly" />
-    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="css/app.css" />
+    <link href="Split.styles.css" rel="stylesheet" />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <link href="Syncro.styles.css" rel="stylesheet" />
     <link href="manifest.webmanifest" rel="manifest" />
     <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png" />
     <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet" />
-    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <script type="importmap"></script>
 </head>
 
 <body>
     <div id="app">
-        <svg class="loading-progress">
-            <circle r="40%" cx="50%" cy="50%" />
-            <circle r="40%" cx="50%" cy="50%" />
-        </svg>
-        <div class="loading-progress-text"></div>
+        <!-- Ladebildschirm, bis Blazor geladen ist (gleiches Markup wie Components/LoadingScreen.razor) -->
+        <div class="splash">
+            <div class="splash-logo">
+                <span class="splash-logo-half splash-logo-left">Sp</span><span class="splash-logo-half splash-logo-right">lit</span>
+            </div>
+            <div class="splash-tagline">Gemeinsame Ausgaben, fair geteilt</div>
+            <div class="splash-bar"><div class="splash-bar-fill"></div></div>
+            <div class="splash-status">Lade App … <span class="splash-percent"></span></div>
+        </div>
     </div>
 
     <div id="blazor-error-ui">
-        An unhandled error has occurred.
-        <a href="." class="reload">Reload</a>
+        Es ist ein unerwarteter Fehler aufgetreten.
+        <a href="." class="reload">Neu laden</a>
         <span class="dismiss">🗙</span>
     </div>
+    <script>
+        // Dark-Mode schon vor dem App-Start anwenden, damit der Ladebildschirm nicht aufblitzt
+        try {
+            const stored = localStorage.getItem('split.darkmode');
+            const dark = stored !== null ? stored === 'true' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (dark) document.documentElement.classList.add('splash-dark');
+        } catch { }
+    </script>
+    <script src="js/app.js"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>

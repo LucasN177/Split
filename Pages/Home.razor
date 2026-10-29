@@ -1,2 +1,156 @@
 ﻿@page "/"
+@inject IGroupService GroupService
+@inject IAuthService AuthService
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
 
+<PageTitle>Dashboard – Split</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Hallo@(string.IsNullOrEmpty(FirstName) ? "" : $", {FirstName}") 👋</MudText>
+<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-6">Hier ist dein Überblick über alle Gruppen.</MudText>
+
+@if (_loading)
+{
+    <PageLoader Text="Dashboard wird geladen …" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        @_error
+        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="Load" Class="ml-2">Erneut versuchen</MudButton>
+    </MudAlert>
+}
+else if (_overview is not null)
+{
+    <MudGrid Spacing="3" Class="mb-6">
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="1" Class="pa-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                    <MudAvatar Color="Color.Success" Variant="Variant.Outlined"><MudIcon Icon="@Icons.Material.Filled.TrendingUp" /></MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Du bekommst</MudText>
+                        <MoneyText Amount="_overview.TotalOwedToMe" Typo="Typo.h5" Colored="false" />
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="1" Class="pa-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                    <MudAvatar Color="Color.Error" Variant="Variant.Outlined"><MudIcon Icon="@Icons.Material.Filled.TrendingDown" /></MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Du schuldest</MudText>
+                        <MoneyText Amount="_overview.TotalIOwe" Typo="Typo.h5" Colored="false" />
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="1" Class="pa-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                    <MudAvatar Color="Color.Primary" Variant="Variant.Outlined"><MudIcon Icon="@Icons.Material.Filled.Groups" /></MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Aktive Gruppen</MudText>
+                        <MudText Typo="Typo.h5">@_overview.Groups.Count</MudText>
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (_overview.Groups.Count == 0)
+    {
+        <MudPaper Elevation="1">
+            <EmptyState Icon="@Icons.Material.Outlined.GroupAdd" Title="Noch keine Gruppen"
+                        Description="Erstelle deine erste Gruppe für einen Urlaub, die WG oder den nächsten Restaurantbesuch.">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateGroup" Class="mt-2">
+                    Gruppe erstellen
+                </MudButton>
+            </EmptyState>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="7">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                    <MudText Typo="Typo.h6">Deine Gruppen</MudText>
+                    <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" OnClick="CreateGroup">Neue Gruppe</MudButton>
+                </MudStack>
+                <MudPaper Elevation="1">
+                    @foreach (var summary in _overview.Groups)
+                    {
+                        <div class="split-row split-card-link" @onclick="@(() => Navigation.NavigateTo($"groups/{summary.Group.Id}"))">
+                            <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium">@Money.Initials(summary.Group.Name)</MudAvatar>
+                            <div class="split-row-main">
+                                <MudText Typo="Typo.subtitle1" Class="text-truncate">@summary.Group.Name</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @summary.MemberCount Mitglieder · @Money.Format(summary.TotalExpenses, summary.Group.Currency) gesamt
+                                </MudText>
+                            </div>
+                            <div style="text-align: right;">
+                                <MoneyText Amount="summary.MyBalance" Currency="@summary.Group.Currency" ShowSign="true" Typo="Typo.subtitle1" />
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @(summary.MyBalance > 0 ? "bekommst du" : summary.MyBalance < 0 ? "schuldest du" : "ausgeglichen")
+                                </MudText>
+                            </div>
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="5">
+                <MudText Typo="Typo.h6" Class="mb-2" Style="line-height: 30.75px;">Letzte Ausgaben</MudText>
+                <MudPaper Elevation="1">
+                    @if (_overview.RecentExpenses.Count == 0)
+                    {
+                        <EmptyState Icon="@Icons.Material.Outlined.ReceiptLong" Title="Noch keine Ausgaben" />
+                    }
+                    @foreach (var item in _overview.RecentExpenses)
+                    {
+                        <div class="split-row split-card-link" @onclick="@(() => Navigation.NavigateTo($"groups/{item.Expense.GroupId}"))">
+                            <MudIcon Icon="@Money.CategoryIcon(item.Expense.Category)" Color="Color.Primary" />
+                            <div class="split-row-main">
+                                <MudText Typo="Typo.body1" Class="text-truncate">@item.Expense.Title</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate d-block">
+                                    @item.GroupName · @item.PaidByName · @item.Expense.ExpenseDate.ToString("dd.MM.")
+                                </MudText>
+                            </div>
+                            <MoneyText Amount="item.Expense.Amount" Currency="@item.Currency" Colored="false" Typo="Typo.body1" />
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+}
+
+@code {
+    private DashboardOverview? _overview;
+    private bool _loading = true;
+    private string? _error;
+
+    private string FirstName => AuthService.CurrentProfile?.Vorname is { Length: > 0 } vorname
+        ? vorname
+        : AuthService.CurrentProfile?.Username ?? string.Empty;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        var result = await GroupService.GetDashboard();
+        _overview = result.Data;
+        _error = result.IsSuccess ? null : $"Daten konnten nicht geladen werden: {result.ErrorMessage}";
+        _loading = false;
+    }
+
+    private async Task CreateGroup()
+    {
+        var dialog = await DialogService.ShowAsync<GroupDialog>();
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: GroupDto group })
+            Navigation.NavigateTo($"groups/{group.Id}");
+    }
+}

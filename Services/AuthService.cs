@@ -11,8 +11,18 @@ namespace Split.Services;
 public class AuthService(IAuthRepository authRepository) : IAuthService
 {
     public Session? CurrentSession { get; set; }
-    public User? CurrentUser { get; set; } 
-    
+    public User? CurrentUser { get; set; }
+    public UserDto? CurrentProfile { get; private set; }
+    public bool IsAuthenticated => CurrentUser is not null;
+
+    public event Action? AuthStateChanged;
+
+    public async Task Initialize()
+    {
+        await authRepository.Initialize();
+        await RefreshState();
+    }
+
     public async Task<IResponse<User?>> GetCurrentUser()
     {
         var result =  await authRepository.GetCurrentUser();
@@ -31,43 +41,77 @@ public class AuthService(IAuthRepository authRepository) : IAuthService
         {
             CurrentSession = result.Data;
             return Response<Session?>.Success(result.Data);
-        } 
+        }
         return Response<Session?>.Failure(result.ErrorMessage ?? "No current session");
     }
 
-    public async Task<IResponse<Session>> Login(string username, string password)
+    public async Task<IResponse<Session>> Login(string email, string password)
     {
-        var result =  await authRepository.Login(username, password);
-        return result is { IsSuccess: true, Data: not null } ? Response<Session>.Success(result.Data) : Response<Session>.Failure(result.ErrorMessage ?? "Login failed");
+        var result =  await authRepository.Login(email, password);
+        if (result is not { IsSuccess: true, Data: not null })
+            return Response<Session>.Failure(result.ErrorMessage ?? "Login failed");
+
+        await RefreshState();
+        return Response<Session>.Success(result.Data);
     }
 
-    public async Task<IResponse<Session>> Register(string username, string password)
+    public async Task<IResponse<Session?>> Register(string email, string password, UserDto metadata)
     {
-        var result =  await authRepository.Register(username, password);
-        return result is { IsSuccess: true, Data: not null } ? Response<Session>.Success(result.Data) : Response<Session>.Failure(result.ErrorMessage ?? "Register failed.");
+        var result =  await authRepository.Register(email, password, metadata);
+        if (!result.IsSuccess)
+            return Response<Session?>.Failure(result.ErrorMessage ?? "Register failed.");
+
+        if (result.Data is not null)
+            await RefreshState();
+        return Response<Session?>.Success(result.Data);
     }
 
-    public Task<IResponse> Logout()
+    public async Task<IResponse> Logout()
     {
+        var result = await authRepository.Logout();
         CurrentSession = null;
         CurrentUser = null;
-        authRepository.Logout();
-        return Task.FromResult(Response.Success());
+        CurrentProfile = null;
+        AuthStateChanged?.Invoke();
+        return result;
     }
+
+    public async Task<IResponse> ResetPassword(string email)
+        => await authRepository.ResetPassword(email);
 
     public async Task<IResponse> InsertUserMetadata(UserDto user)
     {
         return await authRepository.InsertUserMetadata(user);
     }
 
-    public Task<IResponse> UpdateUserMetadata(UserDto user)
+    public async Task<IResponse> UpdateUserMetadata(UserDto user)
     {
-        throw new NotImplementedException();
+        var result = await authRepository.UpdateUserMetadata(user);
+        if (result.IsSuccess)
+        {
+            CurrentProfile = user;
+            AuthStateChanged?.Invoke();
+        }
+        return result;
     }
 
     public async Task<IResponse<UserDto>> GetUserMetadata(string id)
     {
         var result = await authRepository.GetUserMetadata(id);
         return result is { IsSuccess: true, Data: not null } ? Response<UserDto>.Success(result.Data) : Response<UserDto>.Failure(result.ErrorMessage ?? "No metadata found");
+    }
+
+    private async Task RefreshState()
+    {
+        await GetCurrentSession();
+        var user = await GetCurrentUser();
+        if (!user.IsSuccess)
+        {
+            CurrentSession = null;
+            CurrentUser = null;
+        }
+
+        CurrentProfile = CurrentUser is not null ? (await GetUserMetadata(CurrentUser.Id!)).Data : null;
+        AuthStateChanged?.Invoke();
     }
 }

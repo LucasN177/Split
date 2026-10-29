@@ -1,0 +1,125 @@
+@page "/register"
+@layout AuthLayout
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Registrieren – Split</PageTitle>
+
+@if (_confirmationSent)
+{
+    <EmptyState Icon="@Icons.Material.Outlined.MarkEmailRead" Title="Fast geschafft!"
+                Description="@($"Wir haben eine Bestätigungs-E-Mail an {_email} gesendet. Bitte bestätige deine Adresse und melde dich anschließend an.")">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="login" Class="mt-2">Zur Anmeldung</MudButton>
+    </EmptyState>
+}
+else
+{
+    <MudText Typo="Typo.h5" Class="mb-1">Konto erstellen</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">Kostenlos registrieren und Ausgaben teilen.</MudText>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
+    }
+
+    <MudForm @ref="_form" @bind-IsValid="_isValid">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_profile.Vorname" Label="Vorname" Variant="Variant.Outlined" AutoFocus="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_profile.Nachname" Label="Nachname" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_profile.Username" Label="Benutzername" Variant="Variant.Outlined"
+                              Required="true" RequiredError="Bitte Benutzernamen angeben"
+                              HelperText="Damit können dich andere zu Gruppen hinzufügen"
+                              Validation="@(new Func<string, string?>(ValidateUsername))" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_email" Label="E-Mail" Variant="Variant.Outlined" InputType="InputType.Email"
+                              Required="true" RequiredError="Bitte E-Mail angeben"
+                              Validation="@(new Func<string, string?>(ValidateEmail))" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_password" Label="Passwort" Variant="Variant.Outlined" InputType="InputType.Password"
+                              Required="true" RequiredError="Bitte Passwort angeben"
+                              HelperText="Mindestens 8 Zeichen"
+                              Validation="@(new Func<string, string?>(ValidatePassword))" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_passwordRepeat" Label="Passwort wiederholen" Variant="Variant.Outlined" InputType="InputType.Password"
+                              Required="true" RequiredError="Bitte Passwort wiederholen"
+                              Validation="@(new Func<string, string?>(v => v == _password ? null : "Passwörter stimmen nicht überein"))" />
+            </MudItem>
+        </MudGrid>
+    </MudForm>
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" Class="mt-6"
+               Disabled="_busy" OnClick="Submit">
+        @if (_busy)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+        }
+        Registrieren
+    </MudButton>
+
+    <MudDivider Class="my-6" />
+
+    <MudText Align="Align.Center" Typo="Typo.body2">
+        Bereits registriert? <MudLink Href="login">Anmelden</MudLink>
+    </MudText>
+}
+
+@code {
+    private MudForm _form = null!;
+    private bool _isValid;
+    private bool _busy;
+    private bool _confirmationSent;
+    private readonly UserDto _profile = new();
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private string _passwordRepeat = string.Empty;
+    private string? _error;
+
+    private static string? ValidateUsername(string value)
+        => System.Text.RegularExpressions.Regex.IsMatch(value ?? "", "^[a-zA-Z0-9_.-]{3,30}$")
+            ? null
+            : "3–30 Zeichen: Buchstaben, Zahlen, _ . -";
+
+    private static string? ValidateEmail(string value)
+        => value?.Contains('@') == true && value.Contains('.') ? null : "Ungültige E-Mail-Adresse";
+
+    private static string? ValidatePassword(string value)
+        => value?.Length >= 8 ? null : "Mindestens 8 Zeichen";
+
+    private async Task Submit()
+    {
+        if (_busy) return;
+        await _form.ValidateAsync();
+        if (!_isValid) return;
+
+        _busy = true;
+        _error = null;
+        _profile.Username = _profile.Username.Trim();
+        var result = await AuthService.Register(_email, _password, _profile);
+        _busy = false;
+
+        if (!result.IsSuccess)
+        {
+            _error = result.ErrorMessage;
+            return;
+        }
+
+        if (result.Data is null)
+        {
+            // E-Mail-Bestätigung in Supabase aktiviert
+            _confirmationSent = true;
+            return;
+        }
+
+        Snackbar.Add("Willkommen bei Split!", Severity.Success);
+        Navigation.NavigateTo("", replace: true);
+    }
+}

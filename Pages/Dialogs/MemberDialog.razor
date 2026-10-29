@@ -1,0 +1,65 @@
+@inject IGroupService GroupService
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Class="mr-2" Style="vertical-align: middle;" />
+            Mitglied hinzufügen
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
+        }
+
+        <MudToggleGroup T="bool" @bind-Value="_isUsername" Color="Color.Primary" Outlined="true" CheckMark="true" Class="mb-4" Style="width: 100%;">
+            <MudToggleItem Value="true" Text="Split-Benutzer" />
+            <MudToggleItem Value="false" Text="Nur Name" />
+        </MudToggleGroup>
+
+        <MudTextField @bind-Value="_name" Variant="Variant.Outlined" AutoFocus="true" Immediate="true"
+                      Label="@(_isUsername ? "Benutzername" : "Name")"
+                      HelperText="@(_isUsername ? "Die Person sieht die Gruppe anschließend in ihrer App." : "Für Personen ohne Split-Konto.")"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@(_isUsername ? Icons.Material.Filled.AlternateEmail : Icons.Material.Filled.Person)"
+                      OnKeyDown="OnKeyDown" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Abbrechen</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_busy || string.IsNullOrWhiteSpace(_name))" OnClick="Save">
+            Hinzufügen
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string GroupId { get; set; } = string.Empty;
+
+    private bool _isUsername = true;
+    private string _name = string.Empty;
+    private bool _busy;
+    private string? _error;
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !string.IsNullOrWhiteSpace(_name))
+            await Save();
+    }
+
+    private async Task Save()
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = null;
+        var result = await GroupService.AddMember(GroupId, _name, _isUsername);
+        _busy = false;
+
+        if (result.IsSuccess)
+            MudDialog.Close(DialogResult.Ok(result.Data));
+        else
+            _error = result.ErrorMessage;
+    }
+}

@@ -1,0 +1,98 @@
+@page "/groups"
+@inject IGroupService GroupService
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Gruppen – Split</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6">
+    <div>
+        <MudText Typo="Typo.h4">Gruppen</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">Alle Gruppen, in denen du Mitglied bist.</MudText>
+    </div>
+    <MudHidden Breakpoint="Breakpoint.Xs">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateGroup">Neue Gruppe</MudButton>
+    </MudHidden>
+</MudStack>
+
+@if (_loading)
+{
+    <PageLoader Text="Gruppen werden geladen …" />
+}
+else if (GroupService.Groups.Count == 0)
+{
+    <MudPaper Elevation="1">
+        <EmptyState Icon="@Icons.Material.Outlined.GroupAdd" Title="Noch keine Gruppen"
+                    Description="Lege eine Gruppe an und lade Freunde ein, um Ausgaben zu teilen.">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateGroup" Class="mt-2">
+                Gruppe erstellen
+            </MudButton>
+        </EmptyState>
+    </MudPaper>
+}
+else
+{
+    <MudTextField @bind-Value="_search" Placeholder="Gruppen durchsuchen" Variant="Variant.Outlined" Immediate="true"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" Class="mb-4" Clearable="true" />
+
+    <MudGrid Spacing="3">
+        @foreach (var group in FilteredGroups)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="1" Class="split-card-link" Style="height: 100%;" @onclick="@(() => Navigation.NavigateTo($"groups/{group.Id}"))">
+                    <MudCardHeader>
+                        <CardHeaderAvatar>
+                            <MudAvatar Color="Color.Primary">@Money.Initials(group.Name)</MudAvatar>
+                        </CardHeaderAvatar>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6" Class="text-truncate">@group.Name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Erstellt am @group.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy") · @group.Currency
+                            </MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    @if (!string.IsNullOrWhiteSpace(group.Description))
+                    {
+                        <MudCardContent Class="pt-0">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">@group.Description</MudText>
+                        </MudCardContent>
+                    }
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+<MudHidden Breakpoint="Breakpoint.SmAndUp">
+    <MudFab Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="split-fab" OnClick="CreateGroup" aria-label="Neue Gruppe" />
+</MudHidden>
+
+@code {
+    private bool _loading = true;
+    private string _search = string.Empty;
+
+    private IEnumerable<GroupDto> FilteredGroups => string.IsNullOrWhiteSpace(_search)
+        ? GroupService.Groups
+        : GroupService.Groups.Where(g => g.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                                         || g.Description.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await GroupService.LoadGroups();
+        if (!result.IsSuccess)
+            Snackbar.Add($"Gruppen konnten nicht geladen werden: {result.ErrorMessage}", Severity.Error);
+        _loading = false;
+    }
+
+    private async Task CreateGroup()
+    {
+        var dialog = await DialogService.ShowAsync<GroupDialog>();
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: GroupDto group })
+        {
+            Snackbar.Add($"Gruppe \"{group.Name}\" erstellt.", Severity.Success);
+            Navigation.NavigateTo($"groups/{group.Id}");
+        }
+    }
+}
