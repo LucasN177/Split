@@ -34,9 +34,9 @@ public static class Money
         _ => MudBlazor.Icons.Material.Filled.Receipt
     };
 
-    public static string Initials(string name)
+    public static string Initials(string? name)
     {
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = (name ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length switch
         {
             0 => "?",

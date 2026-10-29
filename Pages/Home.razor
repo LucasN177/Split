@@ -7,7 +7,7 @@
 <PageTitle>Dashboard – Split</PageTitle>
 
 <MudText Typo="Typo.h4" Class="mb-1">Hallo@(string.IsNullOrEmpty(FirstName) ? "" : $", {FirstName}") 👋</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-6">Hier ist dein Überblick über alle Gruppen.</MudText>
+<MudText Typo="Typo.body1" Class="mud-text-secondary mb-6">Hier ist dein Überblick über alle Gruppen.</MudText>
 
 @if (_loading)
 {
@@ -28,7 +28,7 @@ else if (_overview is not null)
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
                     <MudAvatar Color="Color.Success" Variant="Variant.Outlined"><MudIcon Icon="@Icons.Material.Filled.TrendingUp" /></MudAvatar>
                     <div>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Du bekommst</MudText>
+                        <MudText Class="mud-text-secondary" Typo="Typo.caption">Du bekommst</MudText>
                         <MoneyText Amount="_overview.TotalOwedToMe" Typo="Typo.h5" Colored="false" />
                     </div>
                 </MudStack>
@@ -39,7 +39,7 @@ else if (_overview is not null)
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
                     <MudAvatar Color="Color.Error" Variant="Variant.Outlined"><MudIcon Icon="@Icons.Material.Filled.TrendingDown" /></MudAvatar>
                     <div>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Du schuldest</MudText>
+                        <MudText Class="mud-text-secondary" Typo="Typo.caption">Du schuldest</MudText>
                         <MoneyText Amount="_overview.TotalIOwe" Typo="Typo.h5" Colored="false" />
                     </div>
                 </MudStack>
@@ -50,7 +50,7 @@ else if (_overview is not null)
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
                     <MudAvatar Color="Color.Primary" Variant="Variant.Outlined"><MudIcon Icon="@Icons.Material.Filled.Groups" /></MudAvatar>
                     <div>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Aktive Gruppen</MudText>
+                        <MudText Class="mud-text-secondary" Typo="Typo.caption">Aktive Gruppen</MudText>
                         <MudText Typo="Typo.h5">@_overview.Groups.Count</MudText>
                     </div>
                 </MudStack>
@@ -84,13 +84,13 @@ else if (_overview is not null)
                             <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium">@Money.Initials(summary.Group.Name)</MudAvatar>
                             <div class="split-row-main">
                                 <MudText Typo="Typo.subtitle1" Class="text-truncate">@summary.Group.Name</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                <MudText Class="mud-text-secondary" Typo="Typo.caption">
                                     @summary.MemberCount Mitglieder · @Money.Format(summary.TotalExpenses, summary.Group.Currency) gesamt
                                 </MudText>
                             </div>
                             <div style="text-align: right;">
                                 <MoneyText Amount="summary.MyBalance" Currency="@summary.Group.Currency" ShowSign="true" Typo="Typo.subtitle1" />
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                <MudText Class="mud-text-secondary" Typo="Typo.caption">
                                     @(summary.MyBalance > 0 ? "bekommst du" : summary.MyBalance < 0 ? "schuldest du" : "ausgeglichen")
                                 </MudText>
                             </div>
@@ -112,7 +112,7 @@ else if (_overview is not null)
                             <MudIcon Icon="@Money.CategoryIcon(item.Expense.Category)" Color="Color.Primary" />
                             <div class="split-row-main">
                                 <MudText Typo="Typo.body1" Class="text-truncate">@item.Expense.Title</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate d-block">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary text-truncate d-block">
                                     @item.GroupName · @item.PaidByName · @item.Expense.ExpenseDate.ToString("dd.MM.")
                                 </MudText>
                             </div>

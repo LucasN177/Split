@@ -9,7 +9,7 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6">
     <div>
         <MudText Typo="Typo.h4">Gruppen</MudText>
-        <MudText Typo="Typo.body1" Color="Color.Secondary">Alle Gruppen, in denen du Mitglied bist.</MudText>
+        <MudText Class="mud-text-secondary" Typo="Typo.body1">Alle Gruppen, in denen du Mitglied bist.</MudText>
     </div>
     <MudHidden Breakpoint="Breakpoint.Xs">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateGroup">Neue Gruppe</MudButton>
@@ -47,7 +47,7 @@ else
                         </CardHeaderAvatar>
                         <CardHeaderContent>
                             <MudText Typo="Typo.h6" Class="text-truncate">@group.Name</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            <MudText Class="mud-text-secondary" Typo="Typo.caption">
                                 Erstellt am @group.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy") · @group.Currency
                             </MudText>
                         </CardHeaderContent>
@@ -55,7 +55,7 @@ else
                     @if (!string.IsNullOrWhiteSpace(group.Description))
                     {
                         <MudCardContent Class="pt-0">
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">@group.Description</MudText>
+                            <MudText Class="mud-text-secondary" Typo="Typo.body2">@group.Description</MudText>
                         </MudCardContent>
                     }
                 </MudCard>
@@ -75,7 +75,7 @@ else
     private IEnumerable<GroupDto> FilteredGroups => string.IsNullOrWhiteSpace(_search)
         ? GroupService.Groups
         : GroupService.Groups.Where(g => g.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
-                                         || g.Description.Contains(_search, StringComparison.OrdinalIgnoreCase));
+                                         || (g.Description ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {

@@ -15,7 +15,7 @@
                 <MudAvatar Color="Color.Primary" Size="Size.Large">@Money.Initials($"{_profile.Vorname} {_profile.Nachname}".Trim() is { Length: > 0 } n ? n : _profile.Username)</MudAvatar>
                 <div>
                     <MudText Typo="Typo.h6">Profil</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">@AuthService.CurrentUser?.Email</MudText>
+                    <MudText Class="mud-text-secondary" Typo="Typo.body2">@AuthService.CurrentUser?.Email</MudText>
                 </div>
             </MudStack>
 
@@ -51,10 +51,10 @@
 
         <MudPaper Elevation="1" Class="pa-6 mb-3">
             <MudText Typo="Typo.h6" Class="mb-2">App</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
                 Split lässt sich als App installieren: im Browser-Menü „Zum Startbildschirm hinzufügen“ bzw. „App installieren“ wählen.
             </MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">Version @(typeof(Settings).Assembly.GetName().Version?.ToString(3))</MudText>
+            <MudText Class="mud-text-secondary" Typo="Typo.caption">Version @(typeof(Settings).Assembly.GetName().Version?.ToString(3))</MudText>
         </MudPaper>
 
         <MudPaper Elevation="1" Class="pa-6">
@@ -76,7 +76,7 @@
     {
         var current = AuthService.CurrentProfile;
         if (current is not null)
-            _profile = new UserDto { UserId = current.UserId, Username = current.Username, Vorname = current.Vorname, Nachname = current.Nachname };
+            _profile = new UserDto { UserId = current.UserId, Username = current.Username ?? "", Vorname = current.Vorname ?? "", Nachname = current.Nachname ?? "" };
     }
 
     private async Task SaveProfile()

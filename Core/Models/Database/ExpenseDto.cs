@@ -3,7 +3,7 @@ using Supabase.Postgrest.Models;
 
 namespace Split.Core.Models.Database;
 
-[Table("expenses")]
+[Table("split_expenses")]
 public class ExpenseDto : BaseModel
 {
     [PrimaryKey("id", false)]

@@ -26,7 +26,7 @@ else
                         <span style="color: var(--mud-palette-primary)">Sp</span>lit
                     </MudText>
                     <MudHidden Breakpoint="Breakpoint.SmAndDown">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-top: -4px">By Lucas Nagelsmann</MudText>
+                        <MudText Class="mud-text-secondary" Typo="Typo.caption" Style="margin-top: -4px">By Lucas Nagelsmann</MudText>
                     </MudHidden>
                 </MudStack>
             </MudLink>
@@ -47,7 +47,7 @@ else
                 <ChildContent>
                     <div class="px-4 py-2">
                         <MudText Typo="Typo.subtitle2">@DisplayName</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">@AuthService.CurrentUser?.Email</MudText>
+                        <MudText Class="mud-text-secondary" Typo="Typo.caption">@AuthService.CurrentUser?.Email</MudText>
                     </div>
                     <MudDivider />
                     <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="settings">Profil & Einstellungen</MudMenuItem>
@@ -62,10 +62,10 @@ else
             <MudSpacer/>
             <div class="pa-4">
                 <MudDivider Class="mb-4"/>
-                <MudText Color="Color.Secondary" Typo="Typo.caption" Align="Align.Center" Class="d-block">
+                <MudText Typo="Typo.caption" Align="Align.Center" Class="mud-text-secondary d-block">
                     Split v@(Version)
                 </MudText>
-                <MudText Color="Color.Secondary" Typo="Typo.caption" Align="Align.Center" Class="d-block">
+                <MudText Typo="Typo.caption" Align="Align.Center" Class="mud-text-secondary d-block">
                     © 2026
                 </MudText>
             </div>

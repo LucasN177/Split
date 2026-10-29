@@ -28,8 +28,15 @@ html.splash-dark {
     --splash-accent-dark: #FDBA74;
 }
 
-html.splash-dark body {
-    background: #111827;
+/* Seite immer vollständig mit der Theme-Hintergrundfarbe füllen (keine hellen Ränder unten) */
+html, body {
+    min-height: 100%;
+    background-color: var(--mud-palette-background, var(--splash-bg));
+}
+
+.mud-layout {
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 .splash {
@@ -181,6 +188,7 @@ html.splash-dark body {
 
 .auth-wrapper {
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -195,19 +203,27 @@ html.splash-dark body {
     max-width: 420px;
 }
 
+/* Unbehandelte Fehler deutlich als Fehler anzeigen (statt unauffälligem hellen Balken) */
 #blazor-error-ui {
-    color-scheme: light only;
-    background: lightyellow;
+    background: #DC2626;
+    color: #fff;
+    font-size: 0.9rem;
     bottom: 0;
-    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.25);
     box-sizing: border-box;
     display: none;
     left: 0;
-    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    padding: 0.75rem 3rem calc(0.75rem + env(safe-area-inset-bottom)) 1.25rem;
     position: fixed;
     width: 100%;
     z-index: 3000;
 }
+
+    #blazor-error-ui .reload {
+        color: #fff;
+        font-weight: 600;
+        margin-left: 0.5rem;
+    }
 
     #blazor-error-ui .dismiss {
         cursor: pointer;

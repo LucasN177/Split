@@ -3,7 +3,7 @@
 
 <MudNavMenu Color="Color.Primary" Bordered="true" Class="pt-2">
 
-    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-4 mt-2 mb-1 d-block">
+    <MudText Typo="Typo.caption" Class="mud-text-secondary px-4 mt-2 mb-1 d-block">
         Übersicht
     </MudText>
 
@@ -15,7 +15,7 @@
     </MudNavLink>
 
     <MudDivider Class="my-3"/>
-    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-4 mb-1 d-block">
+    <MudText Typo="Typo.caption" Class="mud-text-secondary px-4 mb-1 d-block">
         Meine Gruppen
     </MudText>
 
@@ -27,11 +27,11 @@
     }
     @if (GroupService.Groups.Count == 0)
     {
-        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="px-4 py-2">Noch keine Gruppen</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary px-4 py-2">Noch keine Gruppen</MudText>
     }
 
     <MudDivider Class="my-3"/>
-    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-4 mb-1 d-block">
+    <MudText Typo="Typo.caption" Class="mud-text-secondary px-4 mb-1 d-block">
         System
     </MudText>
     <MudNavLink Href="settings" Icon="@Icons.Material.Filled.Settings">
