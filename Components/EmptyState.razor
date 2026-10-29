@@ -4,7 +4,7 @@
     <MudText Typo="Typo.h6" Align="Align.Center">@Title</MudText>
     @if (!string.IsNullOrEmpty(Description))
     {
-        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">@Description</MudText>
+        <MudText Class="mud-text-secondary" Typo="Typo.body2" Align="Align.Center">@Description</MudText>
     }
     @ChildContent
 </MudStack>

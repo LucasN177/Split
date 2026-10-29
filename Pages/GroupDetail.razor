@@ -31,7 +31,7 @@ else
                 <MudText Typo="Typo.h4" Class="text-truncate">@_details.Group.Name</MudText>
                 @if (!string.IsNullOrWhiteSpace(_details.Group.Description))
                 {
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">@_details.Group.Description</MudText>
+                    <MudText Class="mud-text-secondary" Typo="Typo.body2">@_details.Group.Description</MudText>
                 }
             </div>
         </MudStack>
@@ -56,19 +56,19 @@ else
     <MudGrid Spacing="3" Class="mb-4">
         <MudItem xs="6" sm="4">
             <MudPaper Elevation="1" Class="pa-4">
-                <MudText Typo="Typo.caption" Color="Color.Secondary">Gesamtausgaben</MudText>
+                <MudText Class="mud-text-secondary" Typo="Typo.caption">Gesamtausgaben</MudText>
                 <MoneyText Amount="_details.TotalExpenses" Currency="@currency" Typo="Typo.h6" Colored="false" />
             </MudPaper>
         </MudItem>
         <MudItem xs="6" sm="4">
             <MudPaper Elevation="1" Class="pa-4">
-                <MudText Typo="Typo.caption" Color="Color.Secondary">Dein Saldo</MudText>
+                <MudText Class="mud-text-secondary" Typo="Typo.caption">Dein Saldo</MudText>
                 <MoneyText Amount="MyBalance" Currency="@currency" Typo="Typo.h6" ShowSign="true" />
             </MudPaper>
         </MudItem>
         <MudItem xs="12" sm="4">
             <MudPaper Elevation="1" Class="pa-4">
-                <MudText Typo="Typo.caption" Color="Color.Secondary">Mitglieder</MudText>
+                <MudText Class="mud-text-secondary" Typo="Typo.caption">Mitglieder</MudText>
                 <MudAvatarGroup Max="6" Spacing="2" MaxColor="Color.Primary" Class="mt-1">
                     @foreach (var member in _details.Members)
                     {
@@ -98,7 +98,7 @@ else
                 <MudPaper Elevation="0" Outlined="true">
                     @foreach (var month in _details.Expenses.GroupBy(e => new DateTime(e.ExpenseDate.Year, e.ExpenseDate.Month, 1)))
                     {
-                        <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-4 pt-3 d-block">
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary px-4 pt-3 d-block">
                             @month.Key.ToString("MMMM yyyy", Money.Culture)
                         </MudText>
                         @foreach (var expense in month)
@@ -110,7 +110,7 @@ else
                                 </MudAvatar>
                                 <div class="split-row-main">
                                     <MudText Typo="Typo.subtitle1" Class="text-truncate">@expense.Title</MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate d-block">
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary text-truncate d-block">
                                         @_details.MemberName(expense.PaidBy) hat bezahlt · @expense.ExpenseDate.ToString("dd.MM.yyyy")
                                     </MudText>
                                 </div>
@@ -118,7 +118,7 @@ else
                                     <MoneyText Amount="expense.Amount" Currency="@currency" Colored="false" Typo="Typo.subtitle1" />
                                     @if (myShare is not null)
                                     {
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">dein Anteil @Money.Format(myShare.Value, currency)</MudText>
+                                        <MudText Class="mud-text-secondary" Typo="Typo.caption">dein Anteil @Money.Format(myShare.Value, currency)</MudText>
                                     }
                                 </div>
                             </div>
@@ -142,7 +142,7 @@ else
                         </MudAvatar>
                         <div class="split-row-main">
                             <MudText Typo="Typo.body1" Class="text-truncate">@balance.DisplayName</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            <MudText Class="mud-text-secondary" Typo="Typo.caption">
                                 bezahlt @Money.Format(balance.Paid, currency) · Anteil @Money.Format(balance.Owed, currency)
                             </MudText>
                             <MudProgressLinear Value="@((double)(Math.Abs(balance.Balance) / max * 100))" Rounded="true" Size="Size.Small"
@@ -190,7 +190,7 @@ else
             </MudStack>
             @if (_details.Settlements.Count == 0)
             {
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Noch keine Ausgleichszahlungen erfasst.</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">Noch keine Ausgleichszahlungen erfasst.</MudText>
             }
             else
             {
@@ -203,7 +203,7 @@ else
                                 <MudText Typo="Typo.body1" Class="text-truncate">
                                     @_details.MemberName(settlement.FromMember) → @_details.MemberName(settlement.ToMember)
                                 </MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                <MudText Class="mud-text-secondary" Typo="Typo.caption">
                                     @settlement.SettledAt.ToString("dd.MM.yyyy")@(string.IsNullOrWhiteSpace(settlement.Note) ? "" : $" · {settlement.Note}")
                                 </MudText>
                             </div>
@@ -234,7 +234,7 @@ else
                                     <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text" Class="ml-1">Du</MudChip>
                                 }
                             </MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            <MudText Class="mud-text-secondary" Typo="Typo.caption">
                                 @(member.UserId is null ? "Ohne Split-Konto" : "Split-Benutzer")
                             </MudText>
                         </div>

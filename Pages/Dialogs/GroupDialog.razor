@@ -46,7 +46,7 @@
     protected override void OnInitialized()
     {
         if (Group is not null)
-            _model = new GroupDto { Id = Group.Id, Name = Group.Name, Description = Group.Description, Currency = Group.Currency };
+            _model = new GroupDto { Id = Group.Id, Name = Group.Name, Description = Group.Description ?? "", Currency = string.IsNullOrEmpty(Group.Currency) ? "EUR" : Group.Currency };
     }
 
     private async Task Save()

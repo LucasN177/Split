@@ -134,10 +134,12 @@ public class GroupRepository(Supabase.Client client) : IGroupRepository
     {
         try
         {
-            var result = await client.From<UserDto>()
-                .Filter("username", Operator.ILike, username.Trim())
-                .Get();
-            var user = result.Models.FirstOrDefault();
+            // RPC statt direkter Abfrage, damit die Policies der gemeinsam genutzten users-Tabelle unverändert bleiben
+            var result = await client.Rpc<List<UserDto>>("split_find_user", new Dictionary<string, object>
+            {
+                ["p_username"] = username.Trim()
+            });
+            var user = result?.FirstOrDefault();
             return user is not null ? Response<UserDto>.Success(user) : Response<UserDto>.Failure($"Benutzer \"{username}\" nicht gefunden");
         }
         catch (Exception ex)

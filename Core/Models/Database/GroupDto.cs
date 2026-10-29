@@ -3,7 +3,7 @@ using Supabase.Postgrest.Models;
 
 namespace Split.Core.Models.Database;
 
-[Table("groups")]
+[Table("split_groups")]
 public class GroupDto : BaseModel
 {
     [PrimaryKey("id", false)]

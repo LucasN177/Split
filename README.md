@@ -89,7 +89,7 @@ cd split
 
 Datenbank einrichten
 
-Führe das Skript supabase/schema.sql einmalig im SQL Editor deines Supabase-Projekts aus. Es legt alle Tabellen (users, groups, group_members, expenses, expense_shares, settlements), Trigger und Row-Level-Security-Policies an und kann gefahrlos mehrfach ausgeführt werden.
+Führe das Skript database/split_setup.sql einmalig im SQL Editor deines Supabase-Projekts aus (Dashboard → SQL Editor → Inhalt einfügen → Run). Es legt die Tabellen split_groups, split_group_members, split_expenses, split_expense_shares und split_settlements sowie Funktionen, Trigger und Row-Level-Security-Policies an. Alle Objekte haben das Präfix split_, die gemeinsam genutzte Tabelle users wird nur gelesen. Das Skript kann gefahrlos mehrfach ausgeführt werden.
 
 Konfiguration
 
@@ -139,7 +139,7 @@ Projektstruktur
 * Services/ – Geschäftslogik, u.a. BalanceCalculator für Aufteilung, Salden und minimale Ausgleichszahlungen
 * Pages/ – Seiten (Dashboard, Gruppen, Gruppendetails, Einstellungen, Anmeldung) und Dialoge
 * Components/ – wiederverwendbare UI-Bausteine (Ladebildschirm, Betragsanzeige, Leerzustände)
-* supabase/schema.sql – Datenbankschema inkl. RLS
+* database/split_setup.sql – komplettes Datenbank-Setup (Tabellen, Funktionen, RLS)
 
 ⸻
 

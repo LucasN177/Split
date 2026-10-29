@@ -62,7 +62,11 @@ public class AuthService(IAuthRepository authRepository) : IAuthService
             return Response<Session?>.Failure(result.ErrorMessage ?? "Register failed.");
 
         if (result.Data is not null)
+        {
+            // Profilfelder setzen, falls der users-Trigger die Metadaten nicht übernimmt
+            await authRepository.UpdateUserMetadata(metadata);
             await RefreshState();
+        }
         return Response<Session?>.Success(result.Data);
     }
 
