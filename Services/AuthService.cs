@@ -80,8 +80,34 @@ public class AuthService(IAuthRepository authRepository) : IAuthService
         return result;
     }
 
-    public async Task<IResponse> ResetPassword(string email)
-        => await authRepository.ResetPassword(email);
+    public async Task<IResponse> ResetPassword(string email, string redirectTo)
+        => await authRepository.ResetPassword(email, redirectTo);
+
+    public async Task<IResponse> UpdatePassword(string newPassword)
+    {
+        if (newPassword.Length < 8)
+            return Response.Failure("Das Passwort muss mindestens 8 Zeichen lang sein.", null);
+        return await authRepository.UpdatePassword(newPassword);
+    }
+
+    public async Task<IResponse<string?>> HandleAuthRedirect(Uri uri)
+    {
+        // Supabase hängt Tokens bzw. Fehler als Fragment an: #access_token=…&type=recovery
+        var fragment = System.Web.HttpUtility.ParseQueryString(uri.Fragment.TrimStart('#'));
+        var error = fragment["error_description"];
+        if (!string.IsNullOrEmpty(error))
+            return Response<string?>.Failure(error.Replace('+', ' '));
+
+        if (string.IsNullOrEmpty(fragment["access_token"]))
+            return Response<string?>.Success(null);
+
+        var result = await authRepository.SessionFromUrl(uri);
+        if (!result.IsSuccess)
+            return Response<string?>.Failure(result.ErrorMessage ?? "Link ungültig");
+
+        await RefreshState();
+        return Response<string?>.Success(fragment["type"] ?? "signup");
+    }
 
     public async Task<IResponse> InsertUserMetadata(UserDto user)
     {

@@ -73,6 +73,8 @@ else
 }
 
 @code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
     private MudForm _form = null!;
     private bool _isValid;
     private bool _busy;
@@ -120,6 +122,6 @@ else
         }
 
         Snackbar.Add("Willkommen bei Split!", Severity.Success);
-        Navigation.NavigateTo("", replace: true);
+        Navigation.NavigateTo(string.IsNullOrEmpty(ReturnUrl) || ReturnUrl.Contains("://") || ReturnUrl.StartsWith("//") ? "" : ReturnUrl, replace: true);
     }
 }

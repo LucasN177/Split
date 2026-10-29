@@ -1,0 +1,104 @@
+@page "/join/{Code}"
+@inject IGroupService GroupService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Einladung – Split</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="px-0">
+    @if (_loading)
+    {
+        <PageLoader Text="Einladung wird geprüft …" />
+    }
+    else if (_invite is null)
+    {
+        <MudPaper Elevation="1">
+            <EmptyState Icon="@Icons.Material.Outlined.LinkOff" Title="Einladung ungültig" Description="@_error">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="" Class="mt-2">Zum Dashboard</MudButton>
+            </EmptyState>
+        </MudPaper>
+    }
+    else
+    {
+        <MudPaper Elevation="1" Class="pa-6">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="mb-6">
+                <MudAvatar Color="Color.Primary" Size="Size.Large">@Money.Initials(_invite.GroupName)</MudAvatar>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Du wurdest eingeladen zu</MudText>
+                <MudText Typo="Typo.h5" Align="Align.Center">@_invite.GroupName</MudText>
+            </MudStack>
+
+            @if (_invite.OpenMembers.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle1" Class="mb-1">Bist du schon in der Gruppe eingetragen?</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                    Wähle deinen Namen, damit bisherige Ausgaben deinem Konto zugeordnet werden.
+                </MudText>
+                <MudRadioGroup T="string" @bind-Value="_memberId">
+                    <MudStack Spacing="0">
+                        @foreach (var member in _invite.OpenMembers)
+                        {
+                            <MudRadio T="string" Value="@member.Id" Color="Color.Primary">Ich bin @member.DisplayName</MudRadio>
+                        }
+                        <MudRadio T="string" Value="@NewMember" Color="Color.Primary">Ich bin neu in der Gruppe</MudRadio>
+                    </MudStack>
+                </MudRadioGroup>
+            }
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" Class="mt-6"
+                       Disabled="_busy" OnClick="Accept">
+                Gruppe beitreten
+            </MudButton>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private const string NewMember = "new";
+
+    [Parameter] public string Code { get; set; } = string.Empty;
+
+    private InviteInfo? _invite;
+    private string _memberId = NewMember;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        var result = await GroupService.GetInvite(Code);
+        _loading = false;
+
+        if (!result.IsSuccess)
+        {
+            _error = result.ErrorMessage;
+            return;
+        }
+
+        if (result.Data!.IsMember)
+        {
+            Snackbar.Add("Du bist bereits Mitglied dieser Gruppe.", Severity.Info);
+            Navigation.NavigateTo($"groups/{result.Data.GroupId}", replace: true);
+            return;
+        }
+
+        _invite = result.Data;
+    }
+
+    private async Task Accept()
+    {
+        _busy = true;
+        var result = await GroupService.JoinGroup(Code, _memberId == NewMember ? null : _memberId);
+        _busy = false;
+
+        if (result.IsSuccess)
+        {
+            Snackbar.Add($"Willkommen in „{_invite!.GroupName}“!", Severity.Success);
+            Navigation.NavigateTo($"groups/{result.Data}", replace: true);
+        }
+        else
+        {
+            Snackbar.Add(result.ErrorMessage ?? "Beitritt fehlgeschlagen", Severity.Error);
+        }
+    }
+}

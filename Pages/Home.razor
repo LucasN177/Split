@@ -22,6 +22,10 @@ else if (_error is not null)
 }
 else if (_overview is not null)
 {
+    @if (_overview.IsFromCache)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.CloudOff">Offline – zuletzt gespeicherter Stand.</MudAlert>
+    }
     <MudGrid Spacing="3" Class="mb-6">
         <MudItem xs="12" sm="4">
             <MudPaper Elevation="1" Class="pa-4">

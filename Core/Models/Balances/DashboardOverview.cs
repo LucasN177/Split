@@ -13,6 +13,9 @@ public class DashboardOverview
     public List<GroupSummary> Groups { get; init; } = [];
     public List<ExpenseListItem> RecentExpenses { get; init; } = [];
 
+    /// <summary>True, wenn die Daten aus dem Offline-Cache stammen.</summary>
+    public bool IsFromCache { get; set; }
+
     /// <summary>Summe, die der Benutzer insgesamt zurückbekommt.</summary>
     public decimal TotalOwedToMe => Groups.Where(g => g.MyBalance > 0).Sum(g => g.MyBalance);
 

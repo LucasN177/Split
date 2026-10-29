@@ -37,9 +37,11 @@ jobs:
       env:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        # Optional: ohne dieses Secret sind Push-Benachrichtigungen deaktiviert
+        VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
       run: |
-        jq --arg url "$SUPABASE_URL" --arg key "$SUPABASE_KEY" \
-          '.Supabase.Url = $url | .Supabase.AnonKey = $key' \
+        jq --arg url "$SUPABASE_URL" --arg key "$SUPABASE_KEY" --arg vapid "$VAPID_PUBLIC_KEY" \
+          '.Supabase.Url = $url | .Supabase.AnonKey = $key | .Push.VapidPublicKey = $vapid' \
           wwwroot/appsettings.json > tmp.json && mv tmp.json wwwroot/appsettings.json
         # Entwicklungskonfiguration nicht mit ausliefern
         rm -f wwwroot/appsettings.Development.json
@@ -49,8 +51,11 @@ jobs:
       with:
         dotnet-version: 10.0.x
 
+    - name: Test
+      run: dotnet test tests/Split.Tests -c Release
+
     - name: Publish
-      run: dotnet publish -c Release -o release
+      run: dotnet publish Split.csproj -c Release -o release
 
     - name: Update base href
       run: sed -i 's/<base href="\/" \/>/<base href="\/Split\/" \/>/' release/wwwroot/index.html

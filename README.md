@@ -8,14 +8,20 @@ Die Anwendung basiert auf Blazor WebAssembly als Frontend-Technologie und nutzt 
 
 Features
 
-* 💰 Gemeinsame Ausgaben erfassen
-* 👥 Verwaltung von Gruppen und Teilnehmern
-* 📊 Automatische Berechnung offener Salden
-* 🔄 Nachverfolgung von Ausgleichszahlungen
-* 📱 Progressive Web App (PWA) für mobile und Desktop-Nutzung
-* 🔐 Sichere Authentifizierung über Supabase
-* ☁️ Cloudbasierte Datenspeicherung
-* ⚡ Moderne, performante Single-Page-Anwendung
+* 💰 Gemeinsame Ausgaben erfassen – gleichmäßig, nach Beträgen, Prozent oder Anteilen aufteilen
+* 🧾 Notizen und Belegfotos zu Ausgaben
+* 💱 Ausgaben in Fremdwährung mit automatischem EZB-Wechselkurs
+* 🔁 Wiederkehrende Ausgaben (wöchentlich, monatlich, jährlich)
+* 👥 Gruppen mit Einladungslink, Admin-Rolle, Gruppe verlassen, Namens-Mitglieder später mit Konto verknüpfen
+* 📊 Automatische Salden, minimale Ausgleichsvorschläge und Statistiken (Kategorien, Mitglieder, Verlauf)
+* 🔄 Ausgleichszahlungen erfassen und bearbeiten
+* 🔎 Ausgaben durchsuchen und nach Kategorie oder Mitglied filtern
+* ⚡ Live-Aktualisierung über Supabase Realtime
+* 🔔 Push-Benachrichtigungen bei neuen Ausgaben (optional, siehe docs/push-notifications.md)
+* 📴 Offline-Modus: zuletzt geladene Daten lesen, neue Ausgaben offline erfassen und später synchronisieren
+* 📱 Installierbare PWA mit Update-Hinweis
+* 🔐 Anmeldung, Registrierung, Passwort-Reset und -Änderung über Supabase Auth
+* 📤 CSV-Export je Gruppe
 
 ⸻
 
@@ -113,6 +119,15 @@ dotnet run
 
 Die Anwendung ist anschließend unter http://localhost:5046 verfügbar.
 
+Tests ausführen
+
+dotnet test tests/Split.Tests
+
+Optionale Einrichtung
+
+* Push-Benachrichtigungen: docs/push-notifications.md
+* Veröffentlichung in App Stores: docs/app-stores.md
+
 ⸻
 
 Architektur
@@ -135,24 +150,28 @@ Die Anwendung verfolgt einen clientzentrierten Ansatz, bei dem das Blazor-WebAss
 Projektstruktur
 
 * Core/ – Modelle (Datenbank-DTOs, Salden) und Interfaces
-* Infrastructure/ – Supabase-Repositories und Session-Persistenz (localStorage)
-* Services/ – Geschäftslogik, u.a. BalanceCalculator für Aufteilung, Salden und minimale Ausgleichszahlungen
-* Pages/ – Seiten (Dashboard, Gruppen, Gruppendetails, Einstellungen, Anmeldung) und Dialoge
-* Components/ – wiederverwendbare UI-Bausteine (Ladebildschirm, Betragsanzeige, Leerzustände)
-* database/split_setup.sql – komplettes Datenbank-Setup (Tabellen, Funktionen, RLS)
+* Infrastructure/ – Supabase-Repositories (Datenbank, Storage, Push), Session-Persistenz und Offline-Speicher
+* Services/ – Geschäftslogik: BalanceCalculator (Aufteilung, Salden, Ausgleich), Offline-Synchronisation, Realtime, Push
+* Pages/ – Seiten (Dashboard, Gruppen, Gruppendetails, Einladung, Einstellungen, Anmeldung) und Dialoge
+* Components/ – wiederverwendbare UI-Bausteine (Ladebildschirm, Statistiken, Betragsanzeige, Leerzustände)
+* database/split_setup.sql – komplettes Datenbank-Setup (Tabellen, RPC-Funktionen, RLS, Storage, Realtime)
+* supabase/functions/split-notify – Edge Function für Push-Benachrichtigungen
+* tests/Split.Tests – Unit-Tests der Rechenlogik
 
 ⸻
 
 Roadmap
 
 * ✅ Gruppenverwaltung
-* ✅ Mehrere Währungen (pro Gruppe)
+* ✅ Mehrere Währungen (pro Gruppe und pro Ausgabe mit Umrechnung)
 * ✅ Export von Abrechnungen (CSV)
-* Wiederkehrende Ausgaben
-* Push-Benachrichtigungen
-* Offline-Synchronisation
-* Erweiterte Statistiken
-* Mobile App Stores (PWA Packaging)
+* ✅ Wiederkehrende Ausgaben
+* ✅ Push-Benachrichtigungen
+* ✅ Offline-Synchronisation (neue Ausgaben und Zahlungen)
+* ✅ Erweiterte Statistiken
+* ✅ App-Store-Vorbereitung (Anleitung in docs/app-stores.md)
+* Offline-Bearbeitung bestehender Einträge
+* Maskierbare App-Icons und Store-Screenshots
 
 ⸻
 

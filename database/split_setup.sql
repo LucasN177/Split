@@ -3,7 +3,7 @@
 --
 -- Ausführen: Supabase Dashboard → SQL Editor → Inhalt einfügen → Run
 --
--- * Idempotent: kann beliebig oft ausgeführt werden.
+-- * Idempotent: kann beliebig oft ausgeführt werden (auch für Updates).
 -- * Alle Objekte tragen das Präfix "split_", damit sich die App die
 --   Datenbank gefahrlos mit anderen Projekten teilen kann.
 -- * Die gemeinsam genutzte Tabelle public.users wird NUR gelesen
@@ -31,6 +31,16 @@ alter table public.split_groups add column if not exists description text defaul
 alter table public.split_groups add column if not exists currency    text not null default 'EUR';
 alter table public.split_groups add column if not exists created_by  uuid default auth.uid() references auth.users (id) on delete cascade;
 alter table public.split_groups add column if not exists created_at  timestamptz not null default now();
+alter table public.split_groups add column if not exists invite_code text;
+
+update public.split_groups
+set invite_code = substr(replace(gen_random_uuid()::text, '-', ''), 1, 12)
+where invite_code is null;
+
+alter table public.split_groups
+    alter column invite_code set default substr(replace(gen_random_uuid()::text, '-', ''), 1, 12);
+
+create unique index if not exists split_groups_invite_code_idx on public.split_groups (invite_code);
 
 -- Mitglieder: registrierte Benutzer (user_id) oder reine Namen (user_id = null)
 create table if not exists public.split_group_members (
@@ -45,6 +55,26 @@ create table if not exists public.split_group_members (
 create index if not exists split_group_members_group_idx on public.split_group_members (group_id);
 create index if not exists split_group_members_user_idx  on public.split_group_members (user_id);
 
+-- Wiederkehrende Ausgaben (Vorlagen, aus denen fällige Ausgaben erzeugt werden)
+create table if not exists public.split_recurring_expenses (
+    id          uuid primary key default gen_random_uuid(),
+    group_id    uuid not null references public.split_groups (id) on delete cascade,
+    title       text not null,
+    amount      numeric(12, 2) not null check (amount > 0),
+    paid_by     uuid not null references public.split_group_members (id) on delete cascade,
+    category    text not null default 'Sonstiges',
+    split_mode  text not null default 'equal',
+    -- [{ "member_id": "...", "amount": 12.34, "weight": 1 }, ...]
+    shares      jsonb not null default '[]'::jsonb,
+    repeat_interval text not null default 'monthly' check (repeat_interval in ('weekly', 'monthly', 'yearly')),
+    next_date   date not null default current_date,
+    active      boolean not null default true,
+    created_by  uuid default auth.uid() references auth.users (id) on delete set null,
+    created_at  timestamptz not null default now()
+);
+
+create index if not exists split_recurring_group_idx on public.split_recurring_expenses (group_id);
+
 create table if not exists public.split_expenses (
     id           uuid primary key default gen_random_uuid(),
     group_id     uuid not null references public.split_groups (id) on delete cascade,
@@ -57,6 +87,14 @@ create table if not exists public.split_expenses (
     created_at   timestamptz not null default now()
 );
 
+alter table public.split_expenses add column if not exists note              text not null default '';
+alter table public.split_expenses add column if not exists receipt_path      text;
+alter table public.split_expenses add column if not exists split_mode        text not null default 'equal';
+alter table public.split_expenses add column if not exists original_amount   numeric(12, 2);
+alter table public.split_expenses add column if not exists original_currency text;
+alter table public.split_expenses add column if not exists exchange_rate     numeric(14, 6) not null default 1;
+alter table public.split_expenses add column if not exists recurring_id      uuid references public.split_recurring_expenses (id) on delete set null;
+
 create index if not exists split_expenses_group_idx on public.split_expenses (group_id);
 
 create table if not exists public.split_expense_shares (
@@ -65,6 +103,8 @@ create table if not exists public.split_expense_shares (
     member_id  uuid not null references public.split_group_members (id) on delete cascade,
     amount     numeric(12, 2) not null check (amount >= 0)
 );
+
+alter table public.split_expense_shares add column if not exists weight numeric(12, 4);
 
 create index if not exists split_expense_shares_expense_idx on public.split_expense_shares (expense_id);
 
@@ -82,8 +122,20 @@ create table if not exists public.split_settlements (
 
 create index if not exists split_settlements_group_idx on public.split_settlements (group_id);
 
+-- Web-Push-Abonnements je Gerät
+create table if not exists public.split_push_subscriptions (
+    id         uuid primary key default gen_random_uuid(),
+    user_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+    endpoint   text not null unique,
+    p256dh     text not null,
+    auth       text not null,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists split_push_subscriptions_user_idx on public.split_push_subscriptions (user_id);
+
 -- ---------------------------------------------------------------------
--- 2. Funktionen & Trigger
+-- 2. Hilfsfunktionen
 -- ---------------------------------------------------------------------
 
 -- Anzeigename eines Benutzers aus public.users (Vorname Nachname → Benutzername → E-Mail-Präfix)
@@ -120,6 +172,33 @@ as $$
     );
 $$;
 
+-- Ist der angemeldete Benutzer Admin (Ersteller) der Gruppe?
+create or replace function public.split_is_group_admin(gid uuid)
+returns boolean
+language sql
+stable
+security definer set search_path = public
+as $$
+    select exists (select 1 from public.split_groups where id = gid and created_by = auth.uid());
+$$;
+
+-- Gruppen-ID aus einem Storage-Pfad "<group_id>/<datei>" (null bei ungültigem Pfad)
+create or replace function public.split_storage_group(object_name text)
+returns uuid
+language plpgsql
+immutable
+as $$
+begin
+    return split_part(object_name, '/', 1)::uuid;
+exception when others then
+    return null;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 3. Trigger
+-- ---------------------------------------------------------------------
+
 -- Ersteller wird automatisch Mitglied seiner neuen Gruppe
 create or replace function public.split_handle_new_group()
 returns trigger
@@ -141,6 +220,10 @@ create trigger split_on_group_created
     after insert on public.split_groups
     for each row execute function public.split_handle_new_group();
 
+-- ---------------------------------------------------------------------
+-- 4. RPC-Funktionen (werden von der App aufgerufen)
+-- ---------------------------------------------------------------------
+
 -- Benutzer per Benutzername finden (zum Hinzufügen in Gruppen),
 -- ohne die Policies der gemeinsam genutzten Tabelle users zu ändern
 create or replace function public.split_find_user(p_username text)
@@ -156,19 +239,305 @@ as $$
     limit 1;
 $$;
 
-revoke all on function public.split_find_user(text) from public, anon;
-grant execute on function public.split_find_user(text) to authenticated;
+-- Ausgabe inkl. Aufteilung in EINER Transaktion speichern (Insert oder Update).
+-- Läuft mit den Rechten des Aufrufers, d.h. alle RLS-Policies greifen.
+create or replace function public.split_save_expense(p_expense jsonb, p_shares jsonb)
+returns uuid
+language plpgsql
+security invoker set search_path = public
+as $$
+declare
+    v_id     uuid := nullif(p_expense ->> 'id', '')::uuid;
+    v_amount numeric(12, 2) := (p_expense ->> 'amount')::numeric;
+    v_sum    numeric(12, 2);
+begin
+    select coalesce(sum((s ->> 'amount')::numeric), 0) into v_sum from jsonb_array_elements(p_shares) s;
+    if v_sum <> v_amount then
+        raise exception 'Die Summe der Anteile (%) entspricht nicht dem Betrag (%)', v_sum, v_amount;
+    end if;
+
+    if v_id is null then
+        insert into public.split_expenses (group_id, title, amount, paid_by, category, expense_date, note,
+                                           receipt_path, split_mode, original_amount, original_currency, exchange_rate)
+        values ((p_expense ->> 'group_id')::uuid,
+                p_expense ->> 'title',
+                v_amount,
+                (p_expense ->> 'paid_by')::uuid,
+                coalesce(p_expense ->> 'category', 'Sonstiges'),
+                coalesce((p_expense ->> 'expense_date')::date, current_date),
+                coalesce(p_expense ->> 'note', ''),
+                nullif(p_expense ->> 'receipt_path', ''),
+                coalesce(p_expense ->> 'split_mode', 'equal'),
+                (p_expense ->> 'original_amount')::numeric,
+                nullif(p_expense ->> 'original_currency', ''),
+                coalesce((p_expense ->> 'exchange_rate')::numeric, 1))
+        returning id into v_id;
+    else
+        update public.split_expenses set
+            title             = p_expense ->> 'title',
+            amount            = v_amount,
+            paid_by           = (p_expense ->> 'paid_by')::uuid,
+            category          = coalesce(p_expense ->> 'category', 'Sonstiges'),
+            expense_date      = coalesce((p_expense ->> 'expense_date')::date, current_date),
+            note              = coalesce(p_expense ->> 'note', ''),
+            receipt_path      = nullif(p_expense ->> 'receipt_path', ''),
+            split_mode        = coalesce(p_expense ->> 'split_mode', 'equal'),
+            original_amount   = (p_expense ->> 'original_amount')::numeric,
+            original_currency = nullif(p_expense ->> 'original_currency', ''),
+            exchange_rate     = coalesce((p_expense ->> 'exchange_rate')::numeric, 1)
+        where id = v_id;
+
+        if not found then
+            raise exception 'Ausgabe nicht gefunden oder keine Berechtigung';
+        end if;
+
+        delete from public.split_expense_shares where expense_id = v_id;
+    end if;
+
+    insert into public.split_expense_shares (expense_id, member_id, amount, weight)
+    select v_id, (s ->> 'member_id')::uuid, (s ->> 'amount')::numeric, (s ->> 'weight')::numeric
+    from jsonb_array_elements(p_shares) s
+    where (s ->> 'amount')::numeric > 0;
+
+    return v_id;
+end;
+$$;
+
+-- Fällige wiederkehrende Ausgaben einer Gruppe als normale Ausgaben anlegen.
+-- Gibt die Anzahl erzeugter Ausgaben zurück.
+create or replace function public.split_process_recurring(p_group_id uuid)
+returns integer
+language plpgsql
+security invoker set search_path = public
+as $$
+declare
+    r       public.split_recurring_expenses%rowtype;
+    v_count integer := 0;
+    v_loops integer;
+    v_id    uuid;
+begin
+    for r in
+        select * from public.split_recurring_expenses
+        where group_id = p_group_id and active and next_date <= current_date
+        for update
+    loop
+        v_loops := 0;
+        while r.next_date <= current_date and v_loops < 60 loop
+            insert into public.split_expenses (group_id, title, amount, paid_by, category, expense_date, split_mode, recurring_id)
+            values (r.group_id, r.title, r.amount, r.paid_by, r.category, r.next_date, r.split_mode, r.id)
+            returning id into v_id;
+
+            insert into public.split_expense_shares (expense_id, member_id, amount, weight)
+            select v_id, (s ->> 'member_id')::uuid, (s ->> 'amount')::numeric, (s ->> 'weight')::numeric
+            from jsonb_array_elements(r.shares) s
+            where (s ->> 'amount')::numeric > 0;
+
+            r.next_date := case r.repeat_interval
+                when 'weekly' then r.next_date + interval '1 week'
+                when 'yearly' then r.next_date + interval '1 year'
+                else r.next_date + interval '1 month'
+            end;
+            v_count := v_count + 1;
+            v_loops := v_loops + 1;
+        end loop;
+
+        update public.split_recurring_expenses set next_date = r.next_date where id = r.id;
+    end loop;
+
+    return v_count;
+end;
+$$;
+
+-- Gruppe verlassen: Mitgliedseintrag bleibt als reiner Name erhalten,
+-- damit Ausgaben und Salden der anderen korrekt bleiben.
+-- Verlässt der Admin die Gruppe, wird die Admin-Rolle an das älteste
+-- verbleibende Konto übergeben; ohne weitere Konten wird die Gruppe gelöscht.
+create or replace function public.split_leave_group(p_group_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+    v_uid       uuid := auth.uid();
+    v_successor uuid;
+begin
+    if v_uid is null or not public.split_is_group_member(p_group_id) then
+        raise exception 'Keine Berechtigung';
+    end if;
+
+    update public.split_group_members
+    set user_id = null
+    where group_id = p_group_id and user_id = v_uid;
+
+    if exists (select 1 from public.split_groups where id = p_group_id and created_by = v_uid) then
+        select user_id into v_successor
+        from public.split_group_members
+        where group_id = p_group_id and user_id is not null
+        order by created_at
+        limit 1;
+
+        if v_successor is null then
+            delete from public.split_groups where id = p_group_id;
+        else
+            update public.split_groups set created_by = v_successor where id = p_group_id;
+        end if;
+    end if;
+end;
+$$;
+
+-- Einladung ansehen: Gruppenname und noch nicht verknüpfte Mitglieder
+create or replace function public.split_get_invite(p_code text)
+returns jsonb
+language plpgsql
+stable
+security definer set search_path = public
+as $$
+declare
+    g public.split_groups%rowtype;
+begin
+    if auth.uid() is null then
+        raise exception 'Nicht angemeldet';
+    end if;
+
+    select * into g from public.split_groups where invite_code = p_code;
+    if not found then
+        return null;
+    end if;
+
+    return jsonb_build_object(
+        'group_id', g.id,
+        'group_name', g.name,
+        'is_member', exists (select 1 from public.split_group_members where group_id = g.id and user_id = auth.uid()),
+        'open_members', coalesce((
+            select jsonb_agg(jsonb_build_object('id', m.id, 'display_name', m.display_name) order by m.display_name)
+            from public.split_group_members m
+            where m.group_id = g.id and m.user_id is null), '[]'::jsonb)
+    );
+end;
+$$;
+
+-- Einladung annehmen. Optional mit einem vorhandenen Namens-Mitglied verknüpfen
+-- ("Ich bin …"), damit bisherige Ausgaben dem Konto zugeordnet werden.
+create or replace function public.split_join_group(p_code text, p_member_id uuid default null)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+    v_uid uuid := auth.uid();
+    v_gid uuid;
+begin
+    if v_uid is null then
+        raise exception 'Nicht angemeldet';
+    end if;
+
+    select id into v_gid from public.split_groups where invite_code = p_code;
+    if v_gid is null then
+        raise exception 'Einladung ungültig';
+    end if;
+
+    if exists (select 1 from public.split_group_members where group_id = v_gid and user_id = v_uid) then
+        return v_gid;
+    end if;
+
+    if p_member_id is not null then
+        update public.split_group_members
+        set user_id = v_uid
+        where id = p_member_id and group_id = v_gid and user_id is null;
+
+        if found then
+            return v_gid;
+        end if;
+    end if;
+
+    insert into public.split_group_members (group_id, user_id, display_name)
+    values (v_gid, v_uid, public.split_display_name(v_uid));
+
+    return v_gid;
+end;
+$$;
+
+-- Neuen Einladungscode erzeugen (alter Link wird ungültig)
+create or replace function public.split_regenerate_invite(p_group_id uuid)
+returns text
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+    v_code text := substr(replace(gen_random_uuid()::text, '-', ''), 1, 12);
+begin
+    if not public.split_is_group_admin(p_group_id) then
+        raise exception 'Nur der Admin kann den Einladungslink erneuern';
+    end if;
+
+    update public.split_groups set invite_code = v_code where id = p_group_id;
+    return v_code;
+end;
+$$;
+
+-- Alle Split-Daten des Benutzers entfernen: alle Gruppen verlassen und
+-- Push-Abos löschen. Das Konto selbst bleibt bestehen, da es von anderen
+-- Apps im selben Supabase-Projekt genutzt werden kann.
+create or replace function public.split_delete_my_data()
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+    v_gid uuid;
+begin
+    if auth.uid() is null then
+        raise exception 'Nicht angemeldet';
+    end if;
+
+    for v_gid in
+        select distinct group_id from public.split_group_members where user_id = auth.uid()
+        union
+        select id from public.split_groups where created_by = auth.uid()
+    loop
+        perform public.split_leave_group(v_gid);
+    end loop;
+
+    delete from public.split_push_subscriptions where user_id = auth.uid();
+end;
+$$;
+
+revoke all on function public.split_find_user(text)              from public, anon;
+revoke all on function public.split_save_expense(jsonb, jsonb)    from public, anon;
+revoke all on function public.split_process_recurring(uuid)       from public, anon;
+revoke all on function public.split_leave_group(uuid)             from public, anon;
+revoke all on function public.split_get_invite(text)              from public, anon;
+revoke all on function public.split_join_group(text, uuid)        from public, anon;
+revoke all on function public.split_regenerate_invite(uuid)       from public, anon;
+revoke all on function public.split_delete_my_data()              from public, anon;
+
+grant execute on function public.split_find_user(text)            to authenticated;
+grant execute on function public.split_save_expense(jsonb, jsonb)  to authenticated;
+grant execute on function public.split_process_recurring(uuid)     to authenticated;
+grant execute on function public.split_leave_group(uuid)           to authenticated;
+grant execute on function public.split_get_invite(text)            to authenticated;
+grant execute on function public.split_join_group(text, uuid)      to authenticated;
+grant execute on function public.split_regenerate_invite(uuid)     to authenticated;
+grant execute on function public.split_delete_my_data()            to authenticated;
 
 -- ---------------------------------------------------------------------
--- 3. Row Level Security
+-- 5. Row Level Security
+--
+-- Rollen: Der Ersteller einer Gruppe ist Admin. Alle Mitglieder dürfen
+-- Ausgaben/Zahlungen anlegen und bearbeiten. Löschen dürfen nur der
+-- jeweilige Ersteller oder der Admin. Mitglieder entfernen und die
+-- Gruppe löschen darf nur der Admin.
 -- ---------------------------------------------------------------------
 
-alter table public.split_groups         enable row level security;
-alter table public.split_group_members  enable row level security;
-alter table public.split_expenses       enable row level security;
-alter table public.split_expense_shares enable row level security;
-alter table public.split_settlements    enable row level security;
+alter table public.split_groups             enable row level security;
+alter table public.split_group_members      enable row level security;
+alter table public.split_expenses           enable row level security;
+alter table public.split_expense_shares     enable row level security;
+alter table public.split_settlements        enable row level security;
+alter table public.split_recurring_expenses enable row level security;
+alter table public.split_push_subscriptions enable row level security;
 
+-- Gruppen
 drop policy if exists "split_groups_select" on public.split_groups;
 create policy "split_groups_select" on public.split_groups
     for select to authenticated using (public.split_is_group_member(id));
@@ -185,18 +554,51 @@ drop policy if exists "split_groups_delete" on public.split_groups;
 create policy "split_groups_delete" on public.split_groups
     for delete to authenticated using (created_by = auth.uid());
 
+-- Mitglieder
 drop policy if exists "split_group_members_all" on public.split_group_members;
-create policy "split_group_members_all" on public.split_group_members
-    for all to authenticated
+
+drop policy if exists "split_group_members_select" on public.split_group_members;
+create policy "split_group_members_select" on public.split_group_members
+    for select to authenticated using (public.split_is_group_member(group_id));
+
+drop policy if exists "split_group_members_insert" on public.split_group_members;
+create policy "split_group_members_insert" on public.split_group_members
+    for insert to authenticated with check (public.split_is_group_member(group_id));
+
+drop policy if exists "split_group_members_update" on public.split_group_members;
+create policy "split_group_members_update" on public.split_group_members
+    for update to authenticated
     using (public.split_is_group_member(group_id))
     with check (public.split_is_group_member(group_id));
 
+drop policy if exists "split_group_members_delete" on public.split_group_members;
+create policy "split_group_members_delete" on public.split_group_members
+    for delete to authenticated using (public.split_is_group_admin(group_id));
+
+-- Ausgaben
 drop policy if exists "split_expenses_all" on public.split_expenses;
-create policy "split_expenses_all" on public.split_expenses
-    for all to authenticated
+
+drop policy if exists "split_expenses_select" on public.split_expenses;
+create policy "split_expenses_select" on public.split_expenses
+    for select to authenticated using (public.split_is_group_member(group_id));
+
+drop policy if exists "split_expenses_insert" on public.split_expenses;
+create policy "split_expenses_insert" on public.split_expenses
+    for insert to authenticated with check (public.split_is_group_member(group_id));
+
+drop policy if exists "split_expenses_update" on public.split_expenses;
+create policy "split_expenses_update" on public.split_expenses
+    for update to authenticated
     using (public.split_is_group_member(group_id))
     with check (public.split_is_group_member(group_id));
 
+drop policy if exists "split_expenses_delete" on public.split_expenses;
+create policy "split_expenses_delete" on public.split_expenses
+    for delete to authenticated
+    using (public.split_is_group_member(group_id)
+           and (created_by = auth.uid() or public.split_is_group_admin(group_id)));
+
+-- Aufteilungen
 drop policy if exists "split_expense_shares_all" on public.split_expense_shares;
 create policy "split_expense_shares_all" on public.split_expense_shares
     for all to authenticated
@@ -205,14 +607,112 @@ create policy "split_expense_shares_all" on public.split_expense_shares
     with check (exists (select 1 from public.split_expenses e
                         where e.id = expense_id and public.split_is_group_member(e.group_id)));
 
+-- Ausgleichszahlungen
 drop policy if exists "split_settlements_all" on public.split_settlements;
-create policy "split_settlements_all" on public.split_settlements
-    for all to authenticated
+
+drop policy if exists "split_settlements_select" on public.split_settlements;
+create policy "split_settlements_select" on public.split_settlements
+    for select to authenticated using (public.split_is_group_member(group_id));
+
+drop policy if exists "split_settlements_insert" on public.split_settlements;
+create policy "split_settlements_insert" on public.split_settlements
+    for insert to authenticated with check (public.split_is_group_member(group_id));
+
+drop policy if exists "split_settlements_update" on public.split_settlements;
+create policy "split_settlements_update" on public.split_settlements
+    for update to authenticated
     using (public.split_is_group_member(group_id))
     with check (public.split_is_group_member(group_id));
 
+drop policy if exists "split_settlements_delete" on public.split_settlements;
+create policy "split_settlements_delete" on public.split_settlements
+    for delete to authenticated
+    using (public.split_is_group_member(group_id)
+           and (created_by = auth.uid() or public.split_is_group_admin(group_id)));
+
+-- Wiederkehrende Ausgaben
+drop policy if exists "split_recurring_select" on public.split_recurring_expenses;
+create policy "split_recurring_select" on public.split_recurring_expenses
+    for select to authenticated using (public.split_is_group_member(group_id));
+
+drop policy if exists "split_recurring_insert" on public.split_recurring_expenses;
+create policy "split_recurring_insert" on public.split_recurring_expenses
+    for insert to authenticated with check (public.split_is_group_member(group_id));
+
+drop policy if exists "split_recurring_update" on public.split_recurring_expenses;
+create policy "split_recurring_update" on public.split_recurring_expenses
+    for update to authenticated
+    using (public.split_is_group_member(group_id))
+    with check (public.split_is_group_member(group_id));
+
+drop policy if exists "split_recurring_delete" on public.split_recurring_expenses;
+create policy "split_recurring_delete" on public.split_recurring_expenses
+    for delete to authenticated
+    using (public.split_is_group_member(group_id)
+           and (created_by = auth.uid() or public.split_is_group_admin(group_id)));
+
+-- Push-Abos: nur die eigenen
+drop policy if exists "split_push_own" on public.split_push_subscriptions;
+create policy "split_push_own" on public.split_push_subscriptions
+    for all to authenticated
+    using (user_id = auth.uid())
+    with check (user_id = auth.uid());
+
 -- ---------------------------------------------------------------------
--- 4. Rechte für die API-Rollen
+-- 6. Storage für Belegfotos (privater Bucket, Pfad "<group_id>/<datei>")
+-- ---------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('split-receipts', 'split-receipts', false, 5242880,
+        array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'])
+on conflict (id) do nothing;
+
+drop policy if exists "split_receipts_select" on storage.objects;
+create policy "split_receipts_select" on storage.objects
+    for select to authenticated
+    using (bucket_id = 'split-receipts' and public.split_is_group_member(public.split_storage_group(name)));
+
+drop policy if exists "split_receipts_insert" on storage.objects;
+create policy "split_receipts_insert" on storage.objects
+    for insert to authenticated
+    with check (bucket_id = 'split-receipts' and public.split_is_group_member(public.split_storage_group(name)));
+
+drop policy if exists "split_receipts_update" on storage.objects;
+create policy "split_receipts_update" on storage.objects
+    for update to authenticated
+    using (bucket_id = 'split-receipts' and public.split_is_group_member(public.split_storage_group(name)));
+
+drop policy if exists "split_receipts_delete" on storage.objects;
+create policy "split_receipts_delete" on storage.objects
+    for delete to authenticated
+    using (bucket_id = 'split-receipts' and public.split_is_group_member(public.split_storage_group(name)));
+
+-- ---------------------------------------------------------------------
+-- 7. Realtime: Änderungen live an die App senden
+-- ---------------------------------------------------------------------
+
+do $$
+declare
+    t text;
+begin
+    if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+        create publication supabase_realtime;
+    end if;
+
+    foreach t in array array['split_expenses', 'split_expense_shares', 'split_settlements', 'split_group_members', 'split_groups']
+    loop
+        if not exists (
+            select 1 from pg_publication_tables
+            where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+        ) then
+            execute format('alter publication supabase_realtime add table public.%I', t);
+        end if;
+    end loop;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 8. Rechte für die API-Rollen
 -- ---------------------------------------------------------------------
 
 grant select, insert, update, delete on
@@ -220,8 +720,10 @@ grant select, insert, update, delete on
     public.split_group_members,
     public.split_expenses,
     public.split_expense_shares,
-    public.split_settlements
+    public.split_settlements,
+    public.split_recurring_expenses,
+    public.split_push_subscriptions
 to authenticated;
 
--- PostgREST-Schema-Cache neu laden, damit die API die Tabellen sofort kennt
+-- PostgREST-Schema-Cache neu laden, damit die API die Änderungen sofort kennt
 notify pgrst, 'reload schema';

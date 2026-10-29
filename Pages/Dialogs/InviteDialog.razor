@@ -1,0 +1,87 @@
+@inject IGroupService GroupService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Share" Class="mr-2" Style="vertical-align: middle;" />
+            Freunde einladen
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+            Wer diesen Link öffnet und angemeldet ist, kann der Gruppe „@Details.Group.Name“ beitreten.
+            Personen, die bisher nur als Name eingetragen sind, können sich dabei selbst zuordnen.
+        </MudText>
+
+        @if (string.IsNullOrEmpty(_code))
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true">
+                Für diese Gruppe gibt es noch keinen Einladungslink. Bitte das Datenbank-Skript aktualisieren oder einen neuen Link erzeugen.
+            </MudAlert>
+        }
+        else
+        {
+            <MudTextField T="string" Value="@Link" ReadOnly="true" Variant="Variant.Outlined" Label="Einladungslink"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.ContentCopy" OnAdornmentClick="Copy"
+                          AdornmentAriaLabel="Link kopieren" />
+        }
+
+        @if (Details.IsAdmin)
+        {
+            <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Autorenew" Class="mt-3"
+                       Disabled="_busy" OnClick="Regenerate">Neuen Link erzeugen (alter wird ungültig)</MudButton>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close()">Schließen</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Share"
+                   Disabled="@string.IsNullOrEmpty(_code)" OnClick="Share">Teilen</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public GroupDetails Details { get; set; } = null!;
+
+    private string? _code;
+    private bool _busy;
+
+    private string Link => $"{Navigation.BaseUri}join/{_code}";
+
+    protected override void OnInitialized() => _code = Details.Group.InviteCode;
+
+    private async Task Copy()
+    {
+        var ok = await JS.InvokeAsync<bool>("split.copyToClipboard", Link);
+        Snackbar.Add(ok ? "Link kopiert." : "Kopieren nicht möglich.", ok ? Severity.Success : Severity.Warning);
+    }
+
+    private async Task Share()
+    {
+        var shared = await JS.InvokeAsync<bool>("split.share", $"Split: {Details.Group.Name}",
+            $"Tritt meiner Gruppe „{Details.Group.Name}“ bei Split bei:", Link);
+        if (!shared)
+            await Copy();
+    }
+
+    private async Task Regenerate()
+    {
+        _busy = true;
+        var result = await GroupService.RegenerateInvite(Details.Group.Id);
+        _busy = false;
+        if (result.IsSuccess)
+        {
+            _code = result.Data;
+            Details.Group.InviteCode = result.Data;
+            Snackbar.Add("Neuer Einladungslink erzeugt.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.ErrorMessage ?? "Fehler", Severity.Error);
+        }
+    }
+}

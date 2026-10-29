@@ -1,0 +1,125 @@
+@* Auswertungen einer Gruppe: Kategorien, Ausgaben je Mitglied und Verlauf nach Monaten *@
+
+@if (Details.Expenses.Count == 0)
+{
+    <EmptyState Icon="@Icons.Material.Outlined.InsertChart" Title="Noch keine Daten"
+                Description="Sobald Ausgaben erfasst sind, erscheinen hier Auswertungen." />
+}
+else
+{
+    var currency = Details.Group.Currency;
+
+    <MudGrid Spacing="3" Class="mt-1">
+        <MudItem xs="6" md="3">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Ausgaben gesamt</MudText>
+                <MudText Typo="Typo.h6">@Money.Format(Details.TotalExpenses, currency)</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Anzahl</MudText>
+                <MudText Typo="Typo.h6">@Details.Expenses.Count</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Durchschnitt</MudText>
+                <MudText Typo="Typo.h6">@Money.Format(Math.Round(Details.TotalExpenses / Details.Expenses.Count, 2), currency)</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Größte Ausgabe</MudText>
+                <MudText Typo="Typo.h6">@Money.Format(Details.Expenses.Max(e => e.Amount), currency)</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Outlined="true" Class="pa-4" Style="height: 100%;">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Nach Kategorie</MudText>
+                <MudChart T="double" ChartType="ChartType.Donut" ChartSeries="_categorySeries" ChartLabels="_categoryLabels"
+                          Width="100%" Height="260px" LegendPosition="Position.Bottom" />
+                @foreach (var (label, value) in _categoryLabels.Zip(_categoryValues))
+                {
+                    <div class="d-flex justify-space-between py-1">
+                        <MudText Typo="Typo.body2">@label</MudText>
+                        <MudText Typo="Typo.body2">@Money.Format((decimal)value, currency) · @Percent(value)</MudText>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Outlined="true" Class="pa-4" Style="height: 100%;">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Bezahlt vs. Anteil je Mitglied</MudText>
+                <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="_memberSeries" ChartLabels="_memberLabels"
+                          Width="100%" Height="300px" LegendPosition="Position.Bottom" />
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Verlauf nach Monat</MudText>
+                <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_monthSeries" ChartLabels="_monthLabels"
+                          Width="100%" Height="260px" LegendPosition="Position.Bottom" />
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter, EditorRequired] public GroupDetails Details { get; set; } = null!;
+
+    private string[] _categoryLabels = [];
+    private double[] _categoryValues = [];
+    private List<ChartSeries<double>> _categorySeries = [];
+    private string[] _memberLabels = [];
+    private List<ChartSeries<double>> _memberSeries = [];
+    private string[] _monthLabels = [];
+    private List<ChartSeries<double>> _monthSeries = [];
+
+    protected override void OnParametersSet()
+    {
+        var byCategory = Details.Expenses
+            .GroupBy(e => e.Category)
+            .Select(g => (Label: g.Key, Value: (double)g.Sum(e => e.Amount)))
+            .OrderByDescending(x => x.Value)
+            .ToList();
+        _categoryLabels = byCategory.Select(x => x.Label).ToArray();
+        _categoryValues = byCategory.Select(x => x.Value).ToArray();
+        _categorySeries = [new ChartSeries<double> { Name = "Kategorien", Data = _categoryValues }];
+
+        _memberLabels = Details.Balances.Select(b => b.DisplayName).ToArray();
+        _memberSeries =
+        [
+            new ChartSeries<double> { Name = "Bezahlt", Data = Details.Balances.Select(b => (double)b.Paid).ToArray() },
+            new ChartSeries<double> { Name = "Anteil", Data = Details.Balances.Select(b => (double)b.Owed).ToArray() }
+        ];
+
+        // Lückenlose Monatsreihe vom ersten bis zum letzten Monat mit Ausgaben
+        var first = Details.Expenses.Min(e => new DateTime(e.ExpenseDate.Year, e.ExpenseDate.Month, 1));
+        var last = Details.Expenses.Max(e => new DateTime(e.ExpenseDate.Year, e.ExpenseDate.Month, 1));
+        var months = new List<DateTime>();
+        for (var m = first; m <= last && months.Count < 36; m = m.AddMonths(1))
+            months.Add(m);
+
+        _monthLabels = months.Select(m => m.ToString("MMM yy", Money.Culture)).ToArray();
+        _monthSeries =
+        [
+            new ChartSeries<double>
+            {
+                Name = "Ausgaben",
+                Data = months.Select(m => (double)Details.Expenses
+                    .Where(e => e.ExpenseDate.Year == m.Year && e.ExpenseDate.Month == m.Month)
+                    .Sum(e => e.Amount)).ToArray()
+            }
+        ];
+    }
+
+    private string Percent(double value)
+    {
+        var total = _categoryValues.Sum();
+        return total == 0 ? "0 %" : $"{value / total * 100:0} %";
+    }
+}

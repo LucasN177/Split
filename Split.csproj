@@ -7,7 +7,9 @@
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
     <RootNamespace>Split</RootNamespace>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
+    <!-- Testprojekt und Supabase-Funktionen gehören nicht zur App -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);tests\**;supabase\**;database\**</DefaultItemExcludes>
     <!-- Erforderlich, da Program.cs die Kultur auf de-DE setzt -->
     <BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
   </PropertyGroup>

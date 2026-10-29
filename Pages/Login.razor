@@ -47,7 +47,7 @@
 <MudDivider Class="my-6" />
 
 <MudText Align="Align.Center" Typo="Typo.body2">
-    Noch kein Konto? <MudLink Href="register">Jetzt registrieren</MudLink>
+    Noch kein Konto? <MudLink Href="@(string.IsNullOrEmpty(ReturnUrl) ? "register" : $"register?returnUrl={Uri.EscapeDataString(ReturnUrl)}")">Jetzt registrieren</MudLink>
 </MudText>
 
 @code {

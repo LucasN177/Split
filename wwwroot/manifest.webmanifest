@@ -6,7 +6,9 @@
   "start_url": "./",
   "scope": "./",
   "lang": "de",
+  "dir": "ltr",
   "display": "standalone",
+  "display_override": [ "window-controls-overlay", "standalone" ],
   "orientation": "any",
   "background_color": "#F8FAFC",
   "theme_color": "#F97316",
@@ -24,6 +26,19 @@
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Meine Gruppen",
+      "short_name": "Gruppen",
+      "url": "./groups",
+      "icons": [ { "src": "icon-192.png", "sizes": "192x192" } ]
+    },
+    {
+      "name": "Einstellungen",
+      "url": "./settings",
+      "icons": [ { "src": "icon-192.png", "sizes": "192x192" } ]
     }
   ]
 }

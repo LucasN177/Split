@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using Supabase.Postgrest.Attributes;
 using Supabase.Postgrest.Models;
 
@@ -17,4 +18,8 @@ public class ExpenseShareDto : BaseModel
 
     [Column("amount")]
     public decimal Amount { get; set; }
+
+    /// <summary>Prozentwert bzw. Anzahl Anteile – je nach Aufteilungsart der Ausgabe.</summary>
+    [Column("weight", NullValueHandling.Include)]
+    public decimal? Weight { get; set; }
 }

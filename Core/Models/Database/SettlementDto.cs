@@ -28,7 +28,7 @@ public class SettlementDto : BaseModel
     public DateTime SettledAt { get; set; } = DateTime.Today;
 
     [Column("created_by", ignoreOnUpdate: true)]
-    public string CreatedBy { get; set; } = string.Empty;
+    public string? CreatedBy { get; set; }
 
     [Column("created_at", ignoreOnInsert: true, ignoreOnUpdate: true)]
     public DateTime CreatedAt { get; set; }

@@ -1,8 +1,11 @@
 @page "/groups/{GroupId}"
 @using System.Text
+@implements IAsyncDisposable
 @inject IGroupService GroupService
 @inject IExpenseService ExpenseService
 @inject IAuthService AuthService
+@inject RealtimeService Realtime
+@inject OfflineSyncService OfflineSync
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
@@ -35,24 +38,35 @@ else
                 }
             </div>
         </MudStack>
-        <MudStack Row="true" Spacing="1">
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
             @if (_loading)
             {
-                <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" Class="mt-3 mr-2" />
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" Class="mr-2" />
             }
+            <MudTooltip Text="Freunde einladen">
+                <MudIconButton Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" aria-label="Freunde einladen"
+                               Disabled="_details.IsFromCache" OnClick="Invite" />
+            </MudTooltip>
             <MudMenu Icon="@Icons.Material.Filled.MoreVert" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" aria-label="Gruppenaktionen">
                 <MudMenuItem Icon="@Icons.Material.Filled.Refresh" OnClick="Load">Aktualisieren</MudMenuItem>
-                <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="EditGroup">Bearbeiten</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Edit" Disabled="_details.IsFromCache" OnClick="EditGroup">Bearbeiten</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Filled.Download" OnClick="ExportCsv">Als CSV exportieren</MudMenuItem>
-                @if (_details.Group.CreatedBy == AuthService.CurrentUser?.Id)
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.ExitToApp" Disabled="_details.IsFromCache" OnClick="LeaveGroup">Gruppe verlassen</MudMenuItem>
+                @if (_details.IsAdmin)
                 {
-                    <MudDivider />
-                    <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="DeleteGroup">Gruppe löschen</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" Disabled="_details.IsFromCache" OnClick="DeleteGroup">Gruppe löschen</MudMenuItem>
                 }
             </MudMenu>
         </MudStack>
     </MudStack>
 
+    @if (_details.IsFromCache)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.CloudOff">
+            Offline – Stand vom @_details.LoadedAt.ToString("dd.MM.yyyy HH:mm"). Neue Ausgaben werden gespeichert, sobald du wieder online bist.
+        </MudAlert>
+    }
     <MudGrid Spacing="3" Class="mb-4">
         <MudItem xs="6" sm="4">
             <MudPaper Elevation="1" Class="pa-4">
@@ -95,42 +109,96 @@ else
             }
             else
             {
-                <MudPaper Elevation="0" Outlined="true">
-                    @foreach (var month in _details.Expenses.GroupBy(e => new DateTime(e.ExpenseDate.Year, e.ExpenseDate.Month, 1)))
+                <MudGrid Spacing="2" Class="mb-2 mt-1">
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_search" Placeholder="Suchen (Titel, Notiz)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Immediate="true" Clearable="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+                    </MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudSelect T="string" @bind-Value="_categoryFilter" Variant="Variant.Outlined" Margin="Margin.Dense" Label="Kategorie" Clearable="true">
+                            @foreach (var category in _details.Expenses.Select(e => e.Category).Distinct().Order())
+                            {
+                                <MudSelectItem Value="@category">@category</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudSelect T="string" @bind-Value="_memberFilter" Variant="Variant.Outlined" Margin="Margin.Dense" Label="Mitglied" Clearable="true">
+                            @foreach (var member in _details.Members)
+                            {
+                                <MudSelectItem Value="@member.Id">@member.DisplayName</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+
+                @if (!FilteredExpenses.Any())
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary pa-4">Keine Ausgaben passend zum Filter.</MudText>
+                }
+                else
+                {
+                    @if (IsFiltered)
                     {
-                        <MudText Typo="Typo.overline" Class="mud-text-secondary px-4 pt-3 d-block">
-                            @month.Key.ToString("MMMM yyyy", Money.Culture)
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-1">
+                            @FilteredExpenses.Count() Treffer · @Money.Format(FilteredExpenses.Sum(e => e.Amount), currency)
                         </MudText>
-                        @foreach (var expense in month)
-                        {
-                            var myShare = MyShare(expense);
-                            <div class="split-row split-card-link" @onclick="() => OpenExpense(expense)">
-                                <MudAvatar Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Medium">
-                                    <MudIcon Icon="@Money.CategoryIcon(expense.Category)" />
-                                </MudAvatar>
-                                <div class="split-row-main">
-                                    <MudText Typo="Typo.subtitle1" Class="text-truncate">@expense.Title</MudText>
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary text-truncate d-block">
-                                        @_details.MemberName(expense.PaidBy) hat bezahlt · @expense.ExpenseDate.ToString("dd.MM.yyyy")
-                                    </MudText>
-                                </div>
-                                <div style="text-align: right;">
-                                    <MoneyText Amount="expense.Amount" Currency="@currency" Colored="false" Typo="Typo.subtitle1" />
-                                    @if (myShare is not null)
-                                    {
-                                        <MudText Class="mud-text-secondary" Typo="Typo.caption">dein Anteil @Money.Format(myShare.Value, currency)</MudText>
-                                    }
-                                </div>
-                            </div>
-                        }
                     }
-                </MudPaper>
+                    <MudPaper Elevation="0" Outlined="true">
+                        @foreach (var month in FilteredExpenses.GroupBy(e => new DateTime(e.ExpenseDate.Year, e.ExpenseDate.Month, 1)))
+                        {
+                            <MudText Typo="Typo.overline" Class="mud-text-secondary px-4 pt-3 d-block">
+                                @month.Key.ToString("MMMM yyyy", Money.Culture)
+                            </MudText>
+                            @foreach (var expense in month)
+                            {
+                                var myShare = MyShare(expense);
+                                <div class="split-row split-card-link" @onclick="() => OpenExpense(expense)">
+                                    <MudAvatar Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Medium">
+                                        <MudIcon Icon="@Money.CategoryIcon(expense.Category)" />
+                                    </MudAvatar>
+                                    <div class="split-row-main">
+                                        <MudText Typo="Typo.subtitle1" Class="text-truncate">
+                                            @expense.Title
+                                            @if (expense.RecurringId is not null)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Repeat" Size="Size.Small" Class="ml-1 mud-text-secondary" Style="vertical-align: middle;" />
+                                            }
+                                            @if (!string.IsNullOrEmpty(expense.ReceiptPath))
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Class="ml-1 mud-text-secondary" Style="vertical-align: middle;" />
+                                            }
+                                        </MudText>
+                                        <MudText Class="mud-text-secondary text-truncate d-block" Typo="Typo.caption">
+                                            @_details.MemberName(expense.PaidBy) hat bezahlt · @expense.ExpenseDate.ToString("dd.MM.yyyy")
+                                            @if (!string.IsNullOrWhiteSpace(expense.Note))
+                                            {
+                                                <span> · @expense.Note</span>
+                                            }
+                                        </MudText>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <MoneyText Amount="expense.Amount" Currency="@currency" Colored="false" Typo="Typo.subtitle1" />
+                                        @if (expense.IsForeignCurrency)
+                                        {
+                                            <MudText Class="mud-text-secondary" Typo="Typo.caption">@Money.Format(expense.OriginalAmount!.Value, expense.OriginalCurrency!)</MudText>
+                                        }
+                                        else if (myShare is not null)
+                                        {
+                                            <MudText Class="mud-text-secondary" Typo="Typo.caption">dein Anteil @Money.Format(myShare.Value, currency)</MudText>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </MudPaper>
+                }
             }
         </MudTabPanel>
 
         @* ---------------- Salden ---------------- *@
-        <MudTabPanel Text="Salden" Icon="@Icons.Material.Filled.BarChart">
-            <MudPaper Elevation="0" Outlined="true">
+        <MudTabPanel Text="Salden" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+            <MudPaper Elevation="0" Outlined="true" Class="mt-1">
                 @{
                     var max = Math.Max(1m, _details.Balances.Select(b => Math.Abs(b.Balance)).DefaultIfEmpty(0).Max());
                 }
@@ -175,7 +243,7 @@ else
                                 </MudText>
                             </div>
                             <MoneyText Amount="suggestion.Amount" Currency="@currency" Colored="false" Typo="Typo.subtitle1" />
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => AddSettlement(suggestion)">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => OpenSettlement(null, suggestion)">
                                 Begleichen
                             </MudButton>
                         </div>
@@ -186,7 +254,7 @@ else
             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
                 <MudText Typo="Typo.h6">Erfasste Zahlungen</MudText>
                 <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary"
-                           Disabled="@(_details.Members.Count < 2)" OnClick="() => AddSettlement(null)">Zahlung erfassen</MudButton>
+                           Disabled="@(_details.Members.Count < 2)" OnClick="() => OpenSettlement(null, null)">Zahlung erfassen</MudButton>
             </MudStack>
             @if (_details.Settlements.Count == 0)
             {
@@ -197,7 +265,7 @@ else
                 <MudPaper Elevation="0" Outlined="true">
                     @foreach (var settlement in _details.Settlements)
                     {
-                        <div class="split-row">
+                        <div class="split-row split-card-link" @onclick="() => OpenSettlement(settlement, null)">
                             <MudIcon Icon="@Icons.Material.Filled.Payments" Color="Color.Success" />
                             <div class="split-row-main">
                                 <MudText Typo="Typo.body1" Class="text-truncate">
@@ -208,44 +276,102 @@ else
                                 </MudText>
                             </div>
                             <MoneyText Amount="settlement.Amount" Currency="@currency" Colored="false" />
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Zahlung löschen"
-                                           OnClick="() => DeleteSettlement(settlement)" />
                         </div>
                     }
                 </MudPaper>
             }
         </MudTabPanel>
 
+        @* ---------------- Wiederkehrend ---------------- *@
+        <MudTabPanel Text="Wiederkehrend" Icon="@Icons.Material.Filled.Repeat" BadgeData="@(_details.Recurring.Count > 0 ? _details.Recurring.Count : null)" BadgeColor="Color.Primary">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2 mt-2">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Werden automatisch zum Fälligkeitsdatum als Ausgabe angelegt.</MudText>
+                <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Disabled="_details.IsFromCache"
+                           OnClick="() => OpenExpense(null)">Neu</MudButton>
+            </MudStack>
+            @if (_details.Recurring.Count == 0)
+            {
+                <EmptyState Icon="@Icons.Material.Outlined.EventRepeat" Title="Keine wiederkehrenden Ausgaben"
+                            Description="Beim Anlegen einer Ausgabe „Wiederholen“ aktivieren – ideal für Miete, Strom oder Abos." />
+            }
+            else
+            {
+                <MudPaper Elevation="0" Outlined="true">
+                    @foreach (var recurring in _details.Recurring)
+                    {
+                        <div class="split-row">
+                            <MudIcon Icon="@Money.CategoryIcon(recurring.Category)" Color="@(recurring.Active ? Color.Primary : Color.Default)" />
+                            <div class="split-row-main">
+                                <MudText Typo="Typo.body1" Class="text-truncate">@recurring.Title</MudText>
+                                <MudText Class="mud-text-secondary" Typo="Typo.caption">
+                                    @RepeatInterval.Label(recurring.RepeatInterval) · @_details.MemberName(recurring.PaidBy) zahlt ·
+                                    @(recurring.Active ? $"nächste am {recurring.NextDate:dd.MM.yyyy}" : "pausiert")
+                                </MudText>
+                            </div>
+                            <MoneyText Amount="recurring.Amount" Currency="@currency" Colored="false" />
+                            <MudTooltip Text="@(recurring.Active ? "Pausieren" : "Fortsetzen")">
+                                <MudIconButton Icon="@(recurring.Active ? Icons.Material.Filled.Pause : Icons.Material.Filled.PlayArrow)" Size="Size.Small"
+                                               Disabled="_details.IsFromCache" OnClick="() => ToggleRecurring(recurring)" />
+                            </MudTooltip>
+                            @if (_details.CanDelete(recurring.CreatedBy))
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Löschen"
+                                               Disabled="_details.IsFromCache" OnClick="() => DeleteRecurring(recurring)" />
+                            }
+                        </div>
+                    }
+                </MudPaper>
+            }
+        </MudTabPanel>
+
+        @* ---------------- Statistik ---------------- *@
+        <MudTabPanel Text="Statistik" Icon="@Icons.Material.Filled.BarChart">
+            <GroupStatistics Details="_details" />
+        </MudTabPanel>
+
         @* ---------------- Mitglieder ---------------- *@
         <MudTabPanel Text="Mitglieder" Icon="@Icons.Material.Filled.People">
-            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-2 mt-2">
-                <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" OnClick="AddMember">Mitglied hinzufügen</MudButton>
+            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="1" Class="mb-2 mt-2">
+                <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Link" Color="Color.Primary" Disabled="_details.IsFromCache" OnClick="Invite">Einladungslink</MudButton>
+                <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" Disabled="_details.IsFromCache" OnClick="AddMember">Hinzufügen</MudButton>
             </MudStack>
             <MudPaper Elevation="0" Outlined="true">
                 @foreach (var member in _details.Members)
                 {
+                    var isMe = member.UserId is not null && member.UserId == AuthService.CurrentUser?.Id;
+                    var isAdmin = member.UserId is not null && member.UserId == _details.Group.CreatedBy;
                     <div class="split-row">
                         <MudAvatar Size="Size.Medium" Color="@(member.UserId is null ? Color.Default : Color.Primary)">@Money.Initials(member.DisplayName)</MudAvatar>
                         <div class="split-row-main">
                             <MudText Typo="Typo.body1" Class="text-truncate">
                                 @member.DisplayName
-                                @if (member.UserId == AuthService.CurrentUser?.Id)
+                                @if (isMe)
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text" Class="ml-1">Du</MudChip>
                                 }
+                                @if (isAdmin)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined" Class="ml-1">Admin</MudChip>
+                                }
                             </MudText>
                             <MudText Class="mud-text-secondary" Typo="Typo.caption">
-                                @(member.UserId is null ? "Ohne Split-Konto" : "Split-Benutzer")
+                                @(member.UserId is null ? "Ohne Split-Konto – kann sich per Einladungslink zuordnen" : "Split-Benutzer")
                             </MudText>
                         </div>
-                        @if (member.UserId != AuthService.CurrentUser?.Id)
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Umbenennen"
+                                       Disabled="_details.IsFromCache" OnClick="() => RenameMember(member)" />
+                        @if (_details.IsAdmin && !isMe)
                         {
                             <MudIconButton Icon="@Icons.Material.Filled.PersonRemove" Size="Size.Small" aria-label="Mitglied entfernen"
-                                           OnClick="() => RemoveMember(member)" />
+                                           Disabled="_details.IsFromCache" OnClick="() => RemoveMember(member)" />
                         }
                     </div>
                 }
             </MudPaper>
+            @if (!_details.IsAdmin)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">Mitglieder entfernen und die Gruppe löschen kann nur der Admin.</MudText>
+            }
         </MudTabPanel>
     </MudTabs>
 
@@ -260,13 +386,30 @@ else
     private bool _loading = true;
     private string? _error;
     private int _tab;
+    private string _search = string.Empty;
+    private string? _categoryFilter;
+    private string? _memberFilter;
+    private IAsyncDisposable? _realtime;
 
-    private GroupMemberDto? Me => _details?.Members.FirstOrDefault(m => m.UserId == AuthService.CurrentUser?.Id);
+    private GroupMemberDto? Me => _details?.Me;
 
     private decimal MyBalance => Me is null ? 0 : _details!.Balances.FirstOrDefault(b => b.MemberId == Me.Id)?.Balance ?? 0;
 
+    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _categoryFilter is not null || _memberFilter is not null;
+
+    /// <summary>Ausgaben gefiltert nach Suchtext, Kategorie und beteiligtem Mitglied (Zahler oder Anteil).</summary>
+    private IEnumerable<ExpenseDto> FilteredExpenses => _details!.Expenses.Where(e =>
+        (string.IsNullOrWhiteSpace(_search)
+         || e.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
+         || (e.Note ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase))
+        && (_categoryFilter is null || e.Category == _categoryFilter)
+        && (_memberFilter is null || e.PaidBy == _memberFilter
+            || _details.Shares.Any(s => s.ExpenseId == e.Id && s.MemberId == _memberFilter)));
+
     private decimal? MyShare(ExpenseDto expense)
         => Me is null ? null : _details!.Shares.FirstOrDefault(s => s.ExpenseId == expense.Id && s.MemberId == Me.Id)?.Amount;
+
+    protected override void OnInitialized() => OfflineSync.Changed += OnSyncChanged;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -275,13 +418,39 @@ else
         {
             _details = null;
             _tab = 0;
+            _search = string.Empty;
+            _categoryFilter = null;
+            _memberFilter = null;
             await Load();
+            await SubscribeRealtime();
         }
+    }
+
+    private void OnSyncChanged(int synced)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (synced > 0)
+                await Load();
+            else
+                StateHasChanged();
+        });
+    }
+
+    private async Task SubscribeRealtime()
+    {
+        if (_realtime is not null)
+            await _realtime.DisposeAsync();
+
+        _realtime = _details is { IsFromCache: false }
+            ? await Realtime.SubscribeToGroup(GroupId, () => InvokeAsync(Load))
+            : null;
     }
 
     private async Task Load()
     {
         _loading = true;
+        StateHasChanged();
         var result = await GroupService.GetGroupDetails(GroupId);
         if (result.IsSuccess)
         {
@@ -297,62 +466,49 @@ else
             Snackbar.Add($"Aktualisierung fehlgeschlagen: {result.ErrorMessage}", Severity.Error);
         }
         _loading = false;
+        StateHasChanged();
     }
 
-    private DialogOptions WideDialog => new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+    private static DialogOptions WideDialog => new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+
+    /// <summary>Zeigt einen Dialog und lädt bei Erfolg neu. Ein Text als Ergebnis wird als Meldung angezeigt.</summary>
+    private async Task ShowAndReload<TDialog>(DialogParameters<TDialog> parameters) where TDialog : ComponentBase
+    {
+        var dialog = await DialogService.ShowAsync<TDialog>(null, parameters, WideDialog);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false }) return;
+
+        if (result.Data is string message)
+            Snackbar.Add(message, message.StartsWith("Offline") ? Severity.Info : Severity.Success);
+        await Load();
+    }
 
     private async Task OpenExpense(ExpenseDto? expense)
     {
         if (_details is null) return;
-
-        var parameters = new DialogParameters<ExpenseDialog>
+        await ShowAndReload(new DialogParameters<ExpenseDialog>
         {
             { x => x.Details, _details },
             { x => x.Expense, expense }
-        };
-        var dialog = await DialogService.ShowAsync<ExpenseDialog>(null, parameters, WideDialog);
-        var result = await dialog.Result;
-        if (result is { Canceled: false })
-        {
-            Snackbar.Add(result.Data is true ? "Ausgabe gelöscht." : "Ausgabe gespeichert.", Severity.Success);
-            await Load();
-        }
+        });
     }
 
-    private async Task AddSettlement(TransferSuggestion? suggestion)
+    private async Task OpenSettlement(SettlementDto? settlement, TransferSuggestion? suggestion)
     {
         if (_details is null) return;
-
-        var parameters = new DialogParameters<SettlementDialog>
+        await ShowAndReload(new DialogParameters<SettlementDialog>
         {
             { x => x.Details, _details },
+            { x => x.Settlement, settlement },
             { x => x.Suggestion, suggestion }
-        };
-        var dialog = await DialogService.ShowAsync<SettlementDialog>(null, parameters, WideDialog);
-        var result = await dialog.Result;
-        if (result is { Canceled: false })
-        {
-            Snackbar.Add("Zahlung erfasst.", Severity.Success);
-            await Load();
-        }
+        });
     }
 
-    private async Task DeleteSettlement(SettlementDto settlement)
+    private async Task Invite()
     {
-        var confirmed = await DialogService.ShowMessageBoxAsync("Zahlung löschen",
-            "Soll diese Ausgleichszahlung wirklich gelöscht werden?", yesText: "Löschen", cancelText: "Abbrechen");
-        if (confirmed != true) return;
-
-        var result = await ExpenseService.DeleteSettlement(settlement.Id);
-        if (result.IsSuccess)
-        {
-            Snackbar.Add("Zahlung gelöscht.", Severity.Success);
-            await Load();
-        }
-        else
-        {
-            Snackbar.Add(result.ErrorMessage ?? "Löschen fehlgeschlagen", Severity.Error);
-        }
+        if (_details is null) return;
+        var parameters = new DialogParameters<InviteDialog> { { x => x.Details, _details } };
+        await DialogService.ShowAsync<InviteDialog>(null, parameters);
     }
 
     private async Task AddMember()
@@ -365,6 +521,24 @@ else
             Snackbar.Add($"{member.DisplayName} wurde hinzugefügt.", Severity.Success);
             await Load();
         }
+    }
+
+    private async Task RenameMember(GroupMemberDto member)
+    {
+        var parameters = new DialogParameters<TextInputDialog>
+        {
+            { x => x.Label, "Anzeigename" },
+            { x => x.Value, member.DisplayName }
+        };
+        var dialog = await DialogService.ShowAsync<TextInputDialog>("Mitglied umbenennen", parameters);
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: string name } || name == member.DisplayName) return;
+
+        var update = await GroupService.RenameMember(member.Id, name);
+        if (update.IsSuccess)
+            await Load();
+        else
+            Snackbar.Add(update.ErrorMessage ?? "Umbenennen fehlgeschlagen", Severity.Error);
     }
 
     private async Task RemoveMember(GroupMemberDto member)
@@ -387,6 +561,27 @@ else
         }
     }
 
+    private async Task ToggleRecurring(RecurringExpenseDto recurring)
+    {
+        var result = await ExpenseService.SetRecurringActive(recurring, !recurring.Active);
+        if (!result.IsSuccess)
+            Snackbar.Add(result.ErrorMessage ?? "Fehler", Severity.Error);
+        await Load();
+    }
+
+    private async Task DeleteRecurring(RecurringExpenseDto recurring)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync("Wiederkehrende Ausgabe löschen",
+            $"„{recurring.Title}“ wird künftig nicht mehr angelegt. Bereits erzeugte Ausgaben bleiben erhalten.",
+            yesText: "Löschen", cancelText: "Abbrechen");
+        if (confirmed != true) return;
+
+        var result = await ExpenseService.DeleteRecurring(recurring.Id);
+        if (!result.IsSuccess)
+            Snackbar.Add(result.ErrorMessage ?? "Löschen fehlgeschlagen", Severity.Error);
+        await Load();
+    }
+
     private async Task EditGroup()
     {
         if (_details is null) return;
@@ -398,6 +593,28 @@ else
         {
             Snackbar.Add("Gruppe gespeichert.", Severity.Success);
             await Load();
+        }
+    }
+
+    private async Task LeaveGroup()
+    {
+        if (_details is null) return;
+
+        var text = _details.IsAdmin
+            ? "Du bist Admin dieser Gruppe. Die Admin-Rolle geht an das nächste Mitglied mit Konto über – gibt es keines, wird die Gruppe gelöscht. Deine Ausgaben bleiben unter deinem Namen erhalten."
+            : "Deine bisherigen Ausgaben bleiben unter deinem Namen erhalten. Über einen Einladungslink kannst du später wieder beitreten.";
+        var confirmed = await DialogService.ShowMessageBoxAsync("Gruppe verlassen", text, yesText: "Verlassen", cancelText: "Abbrechen");
+        if (confirmed != true) return;
+
+        var result = await GroupService.LeaveGroup(_details.Group.Id);
+        if (result.IsSuccess)
+        {
+            Snackbar.Add("Du hast die Gruppe verlassen.", Severity.Success);
+            Navigation.NavigateTo("groups");
+        }
+        else
+        {
+            Snackbar.Add(result.ErrorMessage ?? "Verlassen fehlgeschlagen", Severity.Error);
         }
     }
 
@@ -426,23 +643,26 @@ else
     {
         if (_details is null) return;
 
-        static string Escape(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
+        static string Escape(string? value) => $"\"{(value ?? "").Replace("\"", "\"\"")}\"";
+        var currency = _details.Group.Currency;
 
         var csv = new StringBuilder();
-        csv.AppendLine("Typ;Datum;Titel;Kategorie;Betrag;Bezahlt von;Aufteilung");
+        csv.AppendLine($"Typ;Datum;Titel;Kategorie;Betrag ({currency});Originalbetrag;Bezahlt von;Aufteilung;Notiz");
         foreach (var expense in _details.Expenses.OrderBy(e => e.ExpenseDate))
         {
             var shares = string.Join(", ", _details.Shares
                 .Where(s => s.ExpenseId == expense.Id)
                 .Select(s => $"{_details.MemberName(s.MemberId)}: {s.Amount.ToString("N2", Money.Culture)}"));
+            var original = expense.IsForeignCurrency ? Money.Format(expense.OriginalAmount!.Value, expense.OriginalCurrency!) : "";
             csv.AppendLine(string.Join(";", "Ausgabe", expense.ExpenseDate.ToString("dd.MM.yyyy"), Escape(expense.Title),
-                Escape(expense.Category), expense.Amount.ToString("N2", Money.Culture), Escape(_details.MemberName(expense.PaidBy)), Escape(shares)));
+                Escape(expense.Category), expense.Amount.ToString("N2", Money.Culture), Escape(original),
+                Escape(_details.MemberName(expense.PaidBy)), Escape(shares), Escape(expense.Note)));
         }
         foreach (var settlement in _details.Settlements.OrderBy(s => s.SettledAt))
         {
-            csv.AppendLine(string.Join(";", "Zahlung", settlement.SettledAt.ToString("dd.MM.yyyy"), Escape(settlement.Note), "",
-                settlement.Amount.ToString("N2", Money.Culture), Escape(_details.MemberName(settlement.FromMember)),
-                Escape($"an {_details.MemberName(settlement.ToMember)}")));
+            csv.AppendLine(string.Join(";", "Zahlung", settlement.SettledAt.ToString("dd.MM.yyyy"), "", "",
+                settlement.Amount.ToString("N2", Money.Culture), "", Escape(_details.MemberName(settlement.FromMember)),
+                Escape($"an {_details.MemberName(settlement.ToMember)}"), Escape(settlement.Note)));
         }
         csv.AppendLine();
         csv.AppendLine("Saldo;Mitglied;Betrag");
@@ -451,5 +671,12 @@ else
 
         var fileName = $"split-{_details.Group.Name.ToLowerInvariant().Replace(' ', '-')}-{DateTime.Today:yyyy-MM-dd}.csv";
         await JS.InvokeVoidAsync("split.downloadFile", fileName, "﻿" + csv, "text/csv;charset=utf-8");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        OfflineSync.Changed -= OnSyncChanged;
+        if (_realtime is not null)
+            await _realtime.DisposeAsync();
     }
 }

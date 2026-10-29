@@ -27,7 +27,15 @@ public interface IAuthService
 
     public Task<IResponse> Logout();
 
-    public Task<IResponse> ResetPassword(string email);
+    public Task<IResponse> ResetPassword(string email, string redirectTo);
+
+    public Task<IResponse> UpdatePassword(string newPassword);
+
+    /// <summary>
+    /// Wertet Tokens aus einem E-Mail-Link (Bestätigung oder Passwort-Reset) aus und meldet den Benutzer an.
+    /// Gibt den Link-Typ zurück (z.B. "recovery", "signup") oder null, wenn die URL keine Tokens enthält.
+    /// </summary>
+    public Task<IResponse<string?>> HandleAuthRedirect(Uri uri);
 
     public Task<IResponse> InsertUserMetadata(UserDto user);
 
