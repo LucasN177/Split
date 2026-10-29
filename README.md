@@ -144,16 +144,34 @@ Projektstruktur
 
 Roadmap
 
-* ✅ Gruppenverwaltung
-* ✅ Mehrere Währungen (pro Gruppe und pro Ausgabe mit Umrechnung)
+Umgesetzt (v0.3)
+
+* ✅ Konten: Registrierung, Anmeldung mit dauerhafter Sitzung, E-Mail-Bestätigung, Passwort zurücksetzen und ändern
+* ✅ Gruppenverwaltung mit Admin-Rolle, Einladungslink, Gruppe verlassen und Mitglieder umbenennen
+* ✅ Namens-Mitglieder ohne Konto, später per Einladung mit einem Konto verknüpfbar
+* ✅ Aufteilung gleichmäßig, nach Beträgen, Prozent oder Anteilen (atomar gespeichert)
+* ✅ Notizen und Belegfotos zu Ausgaben
+* ✅ Mehrere Währungen (pro Gruppe und pro Ausgabe mit EZB-Umrechnung)
+* ✅ Wiederkehrende Ausgaben (wöchentlich, monatlich, jährlich, pausierbar)
+* ✅ Salden, minimale Ausgleichsvorschläge, Zahlungen erfassen und bearbeiten
+* ✅ Suche und Filter in Ausgaben
+* ✅ Statistiken je Gruppe (Kategorien, Mitglieder, Monatsverlauf)
 * ✅ Export von Abrechnungen (CSV)
-* ✅ Wiederkehrende Ausgaben
-* ✅ Push-Benachrichtigungen
-* ✅ Offline-Synchronisation (neue Ausgaben und Zahlungen)
-* ✅ Erweiterte Statistiken
-* ✅ App-Store-Vorbereitung (Anleitung in docs/app-stores.md)
-* Offline-Bearbeitung bestehender Einträge
-* Maskierbare App-Icons und Store-Screenshots
+* ✅ Live-Aktualisierung über Supabase Realtime
+* ✅ Push-Benachrichtigungen (Einrichtung siehe docs/push-notifications.md)
+* ✅ Offline: Lesen des letzten Stands, neue Ausgaben und Zahlungen offline erfassen und synchronisieren
+* ✅ PWA mit Ladebildschirm, Update-Hinweis und App-Shortcuts
+* ✅ Unit-Tests der Rechenlogik, Tests im Deploy-Workflow
+
+Geplant
+
+* Bestehende Ausgaben und Zahlungen auch offline bearbeiten
+* Wiederkehrende Ausgaben serverseitig per Zeitplan anlegen (bisher beim Öffnen der Gruppe)
+* Gruppenübergreifende Statistiken auf dem Dashboard
+* Belegfotos vor dem Upload verkleinern
+* Maskierbare App-Icons und Store-Screenshots, Veröffentlichung in den App Stores (Vorbereitung in docs/app-stores.md)
+* End-to-End-Tests gegen eine Test-Datenbank
+* Mehrsprachigkeit (aktuell nur Deutsch)
 
 ⸻
 
