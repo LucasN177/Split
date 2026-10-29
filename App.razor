@@ -1,7 +1,39 @@
-﻿@using Split.Layout
-<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
-        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-    </Found>
-</Router>
+﻿@implements IDisposable
+@inject AppStateService AppStateService
+@inject IAuthService AuthService
+
+@* Required *@
+<MudThemeProvider Theme="@Theme.Split" IsDarkMode="@AppStateService.IsDarkMode"/>
+<MudPopoverProvider />
+
+@* Needed for dialogs *@
+<MudDialogProvider MaxWidth="MaxWidth.Small" FullWidth="true" CloseButton="true" />
+
+@* Needed for snackbars *@
+<MudSnackbarProvider />
+
+@if (AppStateService.IsInitializing)
+{
+    <LoadingScreen />
+}
+else
+{
+    <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+    </Router>
+}
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        AppStateService.OnChange += StateHasChanged;
+        await AppStateService.Initialize();
+        await AuthService.Initialize();
+        AppStateService.FinishInitialization();
+    }
+
+    public void Dispose() => AppStateService.OnChange -= StateHasChanged;
+}

@@ -25,6 +25,7 @@ public class Response<T> : Response, IResponse<T>
         {
             IsSuccess = false,
             Date = DateTime.Now,
+            ErrorMessage = exception?.Message,
             Exception = exception
         };
     

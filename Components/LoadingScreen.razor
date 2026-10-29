@@ -1,0 +1,13 @@
+@* Vollbild-Ladebildschirm – identisches Markup zum Splash in index.html für einen nahtlosen Übergang *@
+<div class="splash">
+    <div class="splash-logo">
+        <span class="splash-logo-half splash-logo-left">Sp</span><span class="splash-logo-half splash-logo-right">lit</span>
+    </div>
+    <div class="splash-tagline">Gemeinsame Ausgaben, fair geteilt</div>
+    <div class="splash-bar"><div class="splash-bar-fill indeterminate"></div></div>
+    <div class="splash-status">@Text</div>
+</div>
+
+@code {
+    [Parameter] public string Text { get; set; } = "Anmeldung wird geprüft …";
+}

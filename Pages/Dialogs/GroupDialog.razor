@@ -1,0 +1,76 @@
+@inject IGroupService GroupService
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Groups" Class="mr-2" Style="vertical-align: middle;" />
+            @(IsNew ? "Neue Gruppe" : "Gruppe bearbeiten")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
+        }
+        <MudTextField @bind-Value="_model.Name" Label="Name" Variant="Variant.Outlined" AutoFocus="true"
+                      Placeholder="z.B. Urlaub Italien" MaxLength="80" Class="mb-3" />
+        <MudTextField @bind-Value="_model.Description" Label="Beschreibung (optional)" Variant="Variant.Outlined"
+                      Lines="2" MaxLength="250" Class="mb-3" />
+        <MudSelect T="string" @bind-Value="_model.Currency" Label="Währung" Variant="Variant.Outlined">
+            @foreach (var currency in Money.Currencies)
+            {
+                <MudSelectItem Value="@currency">@currency (@Money.Symbol(currency))</MudSelectItem>
+            }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Abbrechen</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_busy || string.IsNullOrWhiteSpace(_model.Name))" OnClick="Save">
+            @(IsNew ? "Erstellen" : "Speichern")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>Bestehende Gruppe zum Bearbeiten – null für eine neue Gruppe.</summary>
+    [Parameter] public GroupDto? Group { get; set; }
+
+    private GroupDto _model = new();
+    private bool _busy;
+    private string? _error;
+
+    private bool IsNew => Group is null;
+
+    protected override void OnInitialized()
+    {
+        if (Group is not null)
+            _model = new GroupDto { Id = Group.Id, Name = Group.Name, Description = Group.Description, Currency = Group.Currency };
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        _error = null;
+
+        if (IsNew)
+        {
+            var result = await GroupService.CreateGroup(_model);
+            _busy = false;
+            if (result.IsSuccess)
+                MudDialog.Close(DialogResult.Ok(result.Data));
+            else
+                _error = result.ErrorMessage;
+        }
+        else
+        {
+            var result = await GroupService.UpdateGroup(_model);
+            _busy = false;
+            if (result.IsSuccess)
+                MudDialog.Close(DialogResult.Ok(_model));
+            else
+                _error = result.ErrorMessage;
+        }
+    }
+}

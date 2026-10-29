@@ -7,6 +7,9 @@
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
     <RootNamespace>Split</RootNamespace>
+    <Version>0.2.0</Version>
+    <!-- Erforderlich, da Program.cs die Kultur auf de-DE setzt -->
+    <BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,15 +21,6 @@
 
   <ItemGroup>
     <ServiceWorker Include="wwwroot\service-worker.js" PublishedContent="wwwroot\service-worker.published.js" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Core\Interfaces\Models\" />
-    <Folder Include="Core\Mapping\" />
-    <Folder Include="Core\Models\Enums\" />
-    <Folder Include="Layout\Helper\" />
-    <Folder Include="Layout\UI Models\" />
-    <Folder Include="Pages\Dialogs\" />
   </ItemGroup>
 
   <ItemGroup>

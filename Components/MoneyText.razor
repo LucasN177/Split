@@ -1,0 +1,16 @@
+@using Split.Layout.Helper
+@* Betrag mit Farbe nach Vorzeichen: grün = bekommt Geld, rot = schuldet *@
+<MudText Typo="@Typo" Color="@TextColor" Class="@Class" Style="font-variant-numeric: tabular-nums; white-space: nowrap;">
+    @(ShowSign && Amount > 0 ? "+" : "")@Money.Format(Amount, Currency)
+</MudText>
+
+@code {
+    [Parameter] public decimal Amount { get; set; }
+    [Parameter] public string Currency { get; set; } = "EUR";
+    [Parameter] public Typo Typo { get; set; } = Typo.body1;
+    [Parameter] public bool Colored { get; set; } = true;
+    [Parameter] public bool ShowSign { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Color TextColor => !Colored || Amount == 0 ? Color.Default : Amount > 0 ? Color.Success : Color.Error;
+}

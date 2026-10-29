@@ -1,0 +1,105 @@
+@page "/settings"
+@inject IAuthService AuthService
+@inject AppStateService AppStateService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Einstellungen – Split</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-6">Einstellungen</MudText>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="7">
+        <MudPaper Elevation="1" Class="pa-6">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-6">
+                <MudAvatar Color="Color.Primary" Size="Size.Large">@Money.Initials($"{_profile.Vorname} {_profile.Nachname}".Trim() is { Length: > 0 } n ? n : _profile.Username)</MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h6">Profil</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@AuthService.CurrentUser?.Email</MudText>
+                </div>
+            </MudStack>
+
+            <MudForm @ref="_form" @bind-IsValid="_isValid">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_profile.Vorname" Label="Vorname" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_profile.Nachname" Label="Nachname" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_profile.Username" Label="Benutzername" Variant="Variant.Outlined"
+                                      Required="true" RequiredError="Bitte Benutzernamen angeben"
+                                      HelperText="Darüber können dich andere zu Gruppen hinzufügen" />
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+
+            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                           Disabled="_busy" OnClick="SaveProfile">Speichern</MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="5">
+        <MudPaper Elevation="1" Class="pa-6 mb-3">
+            <MudText Typo="Typo.h6" Class="mb-4">Darstellung</MudText>
+            <MudSwitch T="bool" Value="AppStateService.IsDarkMode" ValueChanged="AppStateService.SetDarkMode" Color="Color.Primary"
+                       Label="Dunkler Modus" />
+        </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-6 mb-3">
+            <MudText Typo="Typo.h6" Class="mb-2">App</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                Split lässt sich als App installieren: im Browser-Menü „Zum Startbildschirm hinzufügen“ bzw. „App installieren“ wählen.
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Version @(typeof(Settings).Assembly.GetName().Version?.ToString(3))</MudText>
+        </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-6">
+            <MudText Typo="Typo.h6" Class="mb-4">Konto</MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Logout" FullWidth="true" OnClick="Logout">
+                Abmelden
+            </MudButton>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private MudForm _form = null!;
+    private bool _isValid;
+    private bool _busy;
+    private UserDto _profile = new();
+
+    protected override void OnInitialized()
+    {
+        var current = AuthService.CurrentProfile;
+        if (current is not null)
+            _profile = new UserDto { UserId = current.UserId, Username = current.Username, Vorname = current.Vorname, Nachname = current.Nachname };
+    }
+
+    private async Task SaveProfile()
+    {
+        await _form.ValidateAsync();
+        if (!_isValid) return;
+
+        _busy = true;
+        _profile.Username = _profile.Username.Trim();
+        _profile.Vorname = _profile.Vorname.Trim();
+        _profile.Nachname = _profile.Nachname.Trim();
+        var result = await AuthService.UpdateUserMetadata(_profile);
+        _busy = false;
+
+        if (result.IsSuccess)
+            Snackbar.Add("Profil gespeichert.", Severity.Success);
+        else
+            Snackbar.Add($"Speichern fehlgeschlagen: {result.ErrorMessage}", Severity.Error);
+    }
+
+    private async Task Logout()
+    {
+        await AuthService.Logout();
+        Navigation.NavigateTo("login", replace: true);
+    }
+}

@@ -1,36 +1,49 @@
-﻿<MudNavMenu>
+﻿@implements IDisposable
+@inject IGroupService GroupService
 
-        <!-- MAIN -->
-        <MudText Typo="Typo.caption" Class="px-3 mt-2 mb-1 text-muted">
-            Main
-        </MudText>
+<MudNavMenu Color="Color.Primary" Bordered="true" Class="pt-2">
 
-        <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
-            Dashboard
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-4 mt-2 mb-1 d-block">
+        Übersicht
+    </MudText>
+
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+        Dashboard
+    </MudNavLink>
+    <MudNavLink Href="groups" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Groups">
+        Alle Gruppen
+    </MudNavLink>
+
+    <MudDivider Class="my-3"/>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-4 mb-1 d-block">
+        Meine Gruppen
+    </MudText>
+
+    @foreach (var group in GroupService.Groups.Take(10))
+    {
+        <MudNavLink Href="@($"groups/{group.Id}")" Icon="@Icons.Material.Outlined.Group">
+            <span class="text-truncate d-block">@group.Name</span>
         </MudNavLink>
+    }
+    @if (GroupService.Groups.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="px-4 py-2">Noch keine Gruppen</MudText>
+    }
 
-        <!-- Gruppen -->
-        <MudDivider Class="my-3"/>
-        <MudText Typo="Typo.caption" Class="px-3 mt-4 mb-1 text-muted">
-            Gruppen
-        </MudText>
+    <MudDivider Class="my-3"/>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-4 mb-1 d-block">
+        System
+    </MudText>
+    <MudNavLink Href="settings" Icon="@Icons.Material.Filled.Settings">
+        Einstellungen
+    </MudNavLink>
 
-        <MudNavLink Href="team" Icon="@Icons.Material.Filled.Group">
-            Gruppe 1
-        </MudNavLink>
+</MudNavMenu>
 
-        <MudNavLink Href="reports" Icon="@Icons.Material.Filled.BarChart">
-            Gruppe 2
-        </MudNavLink>
+@code {
+    protected override void OnInitialized() => GroupService.GroupsChanged += OnGroupsChanged;
 
-        <!-- SYSTEM -->
-        <MudDivider Class="my-3"/>
+    private void OnGroupsChanged() => InvokeAsync(StateHasChanged);
 
-        <MudText Typo="Typo.caption" Class="px-3 mt-4 mb-1 text-muted">
-            System
-        </MudText>
-        <MudNavLink Href="settings" Icon="@Icons.Material.Filled.Settings">
-            Einstellungen
-        </MudNavLink>
-
-    </MudNavMenu>
+    public void Dispose() => GroupService.GroupsChanged -= OnGroupsChanged;
+}

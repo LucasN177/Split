@@ -87,9 +87,13 @@ Repository klonen
 git clone https://github.com/<username>/split.git
 cd split
 
+Datenbank einrichten
+
+Führe das Skript supabase/schema.sql einmalig im SQL Editor deines Supabase-Projekts aus. Es legt alle Tabellen (users, groups, group_members, expenses, expense_shares, settlements), Trigger und Row-Level-Security-Policies an und kann gefahrlos mehrfach ausgeführt werden.
+
 Konfiguration
 
-Erstelle die benötigten Konfigurationswerte für dein Supabase-Projekt:
+Lokal werden die Werte aus wwwroot/appsettings.Development.json gelesen:
 
 {
   "Supabase": {
@@ -98,12 +102,16 @@ Erstelle die benötigten Konfigurationswerte für dein Supabase-Projekt:
   }
 }
 
+Für das Deployment auf GitHub Pages werden die Werte aus den Repository-Secrets SUPABASE_URL und SUPABASE_KEY beim Build in wwwroot/appsettings.json geschrieben (siehe .github/workflows/deploy.yml). Echte Schlüssel gehören nie in appsettings.json.
+
+Damit Bestätigungs- und Passwort-Links funktionieren, die GitHub-Pages-URL in Supabase unter Authentication → URL Configuration als Site URL bzw. Redirect URL eintragen.
+
 Anwendung starten
 
 dotnet restore
 dotnet run
 
-Die Anwendung ist anschließend lokal verfügbar.
+Die Anwendung ist anschließend unter http://localhost:5046 verfügbar.
 
 ⸻
 
@@ -124,14 +132,25 @@ Die Anwendung verfolgt einen clientzentrierten Ansatz, bei dem das Blazor-WebAss
 
 ⸻
 
+Projektstruktur
+
+* Core/ – Modelle (Datenbank-DTOs, Salden) und Interfaces
+* Infrastructure/ – Supabase-Repositories und Session-Persistenz (localStorage)
+* Services/ – Geschäftslogik, u.a. BalanceCalculator für Aufteilung, Salden und minimale Ausgleichszahlungen
+* Pages/ – Seiten (Dashboard, Gruppen, Gruppendetails, Einstellungen, Anmeldung) und Dialoge
+* Components/ – wiederverwendbare UI-Bausteine (Ladebildschirm, Betragsanzeige, Leerzustände)
+* supabase/schema.sql – Datenbankschema inkl. RLS
+
+⸻
+
 Roadmap
 
-* Gruppenverwaltung
-* Mehrere Währungen
+* ✅ Gruppenverwaltung
+* ✅ Mehrere Währungen (pro Gruppe)
+* ✅ Export von Abrechnungen (CSV)
 * Wiederkehrende Ausgaben
 * Push-Benachrichtigungen
 * Offline-Synchronisation
-* Export von Abrechnungen
 * Erweiterte Statistiken
 * Mobile App Stores (PWA Packaging)
 
